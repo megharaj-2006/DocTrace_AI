@@ -732,31 +732,3 @@ Investigator Review
 
 ### Detect the template. Trace the pattern. Assist the investigation.
 ```
-
-### After you paste it
-
-Your root should now look like:
-
-```text
-DocTrace_AI/
-│
-├── README.md          ← human-facing project overview
-├── AGENTS.md          ← AI coding-agent instructions
-├── .gitignore
-│
-├── ai-service/
-├── backend/
-├── frontend/
-├── dataset/
-│   ├── raw/
-│   ├── generated/
-│   └── metadata/
-├── ml-training/
-│
-└── docs/
-    ├── architecture.md
-    ├── api-contract.md
-    └── development-workflow.md
-```
-
-**Don't write `architecture.md`, `api-contract.md`, and `development-workflow.md` yet unless you need them.** Since we're setting up the repository incrementally, I'd commit `README.md` + `AGENTS.md` now, then create those three docs when the corresponding development work begins. That keeps the repo clean and avoids creating documentation that immediately becomes outdated.
