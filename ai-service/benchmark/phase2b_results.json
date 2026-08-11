@@ -1,0 +1,16 @@
+{
+  "baseline_ram_mb": 426.4,
+  "phase1_load_latency_s": 0.0,
+  "ram_after_phase1_mb": 426.4,
+  "phase1_ram_overhead_mb": 0.0,
+  "phase2a_load_latency_s": 2.834,
+  "ram_after_both_models_loaded_mb": 436.36,
+  "combined_models_ram_overhead_mb": 9.96,
+  "single_page_processing_latency_avg_ms": 7845.83,
+  "single_page_processing_latency_min_ms": 3841.49,
+  "single_page_processing_latency_max_ms": 15583.34,
+  "peak_combined_process_ram_mb": 1253.38,
+  "cuda_available": false,
+  "gpu_name": "NOT AVAILABLE",
+  "vram_allocated_mb": "NOT AVAILABLE"
+}
