@@ -40,20 +40,30 @@ public class AnalysisController {
 
     @Operation(summary = "Get the latest analysis result for an invoice")
     @GetMapping("/analysis")
-    public ResponseEntity<AnalysisResultResponse> getAnalysis(@PathVariable Long invoiceId) {
-        return ResponseEntity.ok(analysisService.getLatestAnalysis(invoiceId));
+    public ResponseEntity<AnalysisResultResponse> getAnalysis(
+            @PathVariable Long invoiceId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(analysisService.getLatestAnalysis(invoiceId, user));
     }
 
     @Operation(summary = "Get full analysis history for an invoice")
     @GetMapping("/analysis/history")
-    public ResponseEntity<List<AnalysisResultResponse>> getHistory(@PathVariable Long invoiceId) {
-        return ResponseEntity.ok(analysisService.getAnalysisHistory(invoiceId));
+    public ResponseEntity<List<AnalysisResultResponse>> getHistory(
+            @PathVariable Long invoiceId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(analysisService.getAnalysisHistory(invoiceId, user));
     }
 
     @Operation(summary = "Get similar documents from the latest analysis")
     @GetMapping("/similar")
-    public ResponseEntity<List<SimilarDocumentResponse>> getSimilar(@PathVariable Long invoiceId) {
-        AnalysisResultResponse result = analysisService.getLatestAnalysis(invoiceId);
+    public ResponseEntity<List<SimilarDocumentResponse>> getSimilar(
+            @PathVariable Long invoiceId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        AnalysisResultResponse result = analysisService.getLatestAnalysis(invoiceId, user);
         return ResponseEntity.ok(result.matchedDocuments());
     }
 }
+

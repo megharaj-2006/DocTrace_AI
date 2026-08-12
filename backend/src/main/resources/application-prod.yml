@@ -33,6 +33,8 @@ doctrace:
     url: ${AI_SERVICE_URL}
     connect-timeout-ms: 5000
     read-timeout-ms: 60000
+    internal-api-key: ${INTERNAL_API_KEY}
+
 
   storage:
     upload-dir: ${UPLOAD_DIR}

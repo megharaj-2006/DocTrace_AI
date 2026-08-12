@@ -1,6 +1,24 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: doctrace-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: doctrace_prod
+      POSTGRES_USER: doctrace
+      POSTGRES_PASSWORD: doctrace_secure_password_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctrace -d doctrace_prod"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   qdrant:
     image: qdrant/qdrant:v1.8.4
     container_name: doctrace-qdrant
@@ -18,6 +36,7 @@ services:
       context: ./ai-service
       dockerfile: Dockerfile
     container_name: doctrace-ai-service
+    restart: always
     ports:
       - "8000:8000"
     environment:
@@ -27,8 +46,36 @@ services:
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION=invoice_page_embeddings_v1
       - SIMILARITY_THRESHOLD=0.955
+      - INTERNAL_API_KEY=dev-internal-secret-key-12345
     depends_on:
       - qdrant
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: doctrace-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=doctrace_prod
+      - DB_USERNAME=doctrace
+      - DB_PASSWORD=doctrace_secure_password_123
+      - JWT_SECRET=CHANGE_ME_IN_PRODUCTION_use_a_64_char_minimum_secret_key_here_abc123_prod_sec_key
+      - AI_SERVICE_URL=http://ai-service:8000
+      - INTERNAL_API_KEY=dev-internal-secret-key-12345
+      - UPLOAD_DIR=storage/uploads
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+
 volumes:
   qdrant_storage:
+  postgres_data:

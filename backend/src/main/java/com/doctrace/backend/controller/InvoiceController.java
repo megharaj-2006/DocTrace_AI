@@ -54,26 +54,34 @@ public class InvoiceController {
                 .body(entityMapper.toInvoiceResponse(invoice));
     }
 
-    @Operation(summary = "List all invoices (paginated)")
+    @Operation(summary = "List invoices (paginated)")
     @GetMapping
     public ResponseEntity<Page<InvoiceResponse>> list(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PageableDefault(size = 20) Pageable pageable) {
-        Page<InvoiceResponse> page = invoiceService.findAll(pageable)
+        User user = userService.findByEmail(userDetails.getUsername());
+        Page<InvoiceResponse> page = invoiceService.findAllForUser(user, pageable)
                 .map(entityMapper::toInvoiceResponse);
         return ResponseEntity.ok(page);
     }
 
     @Operation(summary = "Get invoice details by ID")
     @GetMapping("/{id}")
-    public ResponseEntity<InvoiceResponse> getById(@PathVariable Long id) {
-        Invoice invoice = invoiceService.findById(id);
+    public ResponseEntity<InvoiceResponse> getById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        Invoice invoice = invoiceService.findByIdForUser(id, user);
         return ResponseEntity.ok(entityMapper.toInvoiceResponse(invoice));
     }
 
     @Operation(summary = "Download the invoice file")
     @GetMapping("/{id}/file")
-    public ResponseEntity<Resource> downloadFile(@PathVariable Long id) {
-        Invoice invoice = invoiceService.findById(id);
+    public ResponseEntity<Resource> downloadFile(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        Invoice invoice = invoiceService.findByIdForUser(id, user);
         Resource resource = fileStorageService.loadAsResource(invoice.getStoredFilename());
 
         return ResponseEntity.ok()
@@ -87,19 +95,12 @@ public class InvoiceController {
     @GetMapping("/search")
     public ResponseEntity<Page<InvoiceResponse>> search(
             @RequestParam(required = false) String query,
+            @AuthenticationPrincipal UserDetails userDetails,
             @PageableDefault(size = 20) Pageable pageable) {
-        Page<InvoiceResponse> page = invoiceService.search(query, pageable)
+        User user = userService.findByEmail(userDetails.getUsername());
+        Page<InvoiceResponse> page = invoiceService.searchForUser(query, user, pageable)
                 .map(entityMapper::toInvoiceResponse);
         return ResponseEntity.ok(page);
     }
-
-    @Operation(summary = "Delete an invoice")
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(
-            @PathVariable Long id,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        User user = userService.findByEmail(userDetails.getUsername());
-        invoiceService.delete(id, user);
-        return ResponseEntity.noContent().build();
-    }
 }
+

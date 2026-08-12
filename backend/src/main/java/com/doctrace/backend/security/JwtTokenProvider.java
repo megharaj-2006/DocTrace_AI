@@ -26,10 +26,25 @@ public class JwtTokenProvider {
 
     public JwtTokenProvider(
             @Value("${doctrace.jwt.secret}") String secret,
-            @Value("${doctrace.jwt.expiration-ms}") long expirationMs) {
+            @Value("${doctrace.jwt.expiration-ms}") long expirationMs,
+            org.springframework.core.env.Environment environment) {
+        
+        boolean isProd = java.util.Arrays.asList(environment.getActiveProfiles()).contains("prod");
+        if (isProd) {
+            if (secret == null || secret.isBlank() || secret.contains("CHANGE_ME") || secret.length() < 64) {
+                throw new IllegalStateException(
+                        "CRITICAL: Production JWT_SECRET must be configured with a minimum of 64 characters.");
+            }
+        } else {
+            if (secret == null || secret.isBlank()) {
+                throw new IllegalArgumentException("JWT secret must not be empty.");
+            }
+        }
+
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }
+
 
     /**
      * Generate a JWT for the authenticated user.
