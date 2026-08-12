@@ -105,6 +105,9 @@ class AuthorizationAndLifecycleIntegrationTest {
 
         // Clean up
         fileStorageService.delete(storedFilename);
-        assertThat(fileStorageService.loadAsResource(storedFilename).exists()).isFalse();
+        assertThatThrownBy(() -> fileStorageService.loadAsResource(storedFilename))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("File not found");
     }
 }
+
