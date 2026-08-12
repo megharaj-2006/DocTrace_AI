@@ -71,6 +71,12 @@ public class InvoiceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
     }
 
+    public Invoice findByIdForUser(Long id, User user) {
+        Invoice invoice = findById(id);
+        validateAccess(invoice, user);
+        return invoice;
+    }
+
     public Invoice findByDocumentId(String documentId) {
         return invoiceRepository.findByDocumentId(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "documentId", documentId));
@@ -78,6 +84,13 @@ public class InvoiceService {
 
     public Page<Invoice> findAll(Pageable pageable) {
         return invoiceRepository.findAll(pageable);
+    }
+
+    public Page<Invoice> findAllForUser(User user, Pageable pageable) {
+        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+            return invoiceRepository.findAll(pageable);
+        }
+        return invoiceRepository.findByUploadedById(user.getId(), pageable);
     }
 
     public Page<Invoice> findByUploader(Long userId, Pageable pageable) {
@@ -92,16 +105,22 @@ public class InvoiceService {
         return invoiceRepository.search(query, pageable);
     }
 
-    @Transactional
-    public void delete(Long id, User user) {
-        Invoice invoice = findById(id);
-        fileStorageService.delete(invoice.getStoredFilename());
-        invoiceRepository.delete(invoice);
-
-        log.info("Invoice deleted: id={}, documentId={}", id, invoice.getDocumentId());
-        auditLogService.log(user, "INVOICE_DELETED", "Invoice",
-                id.toString(), "Deleted: " + invoice.getDocumentId());
+    public Page<Invoice> searchForUser(String query, User user, Pageable pageable) {
+        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+            return invoiceRepository.search(query, pageable);
+        }
+        return invoiceRepository.searchForUser(query, user.getId(), pageable);
     }
+
+    public void validateAccess(Invoice invoice, User user) {
+        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+            return;
+        }
+        if (invoice.getUploadedBy() == null || !invoice.getUploadedBy().getId().equals(user.getId())) {
+            throw new ResourceNotFoundException("Invoice", "id", invoice.getId());
+        }
+    }
+
 
     private String generateDocumentId() {
         return "INV-" + UUID.randomUUID().toString().replace("-", "")

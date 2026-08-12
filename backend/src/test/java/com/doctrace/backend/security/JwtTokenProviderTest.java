@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.springframework.mock.env.MockEnvironment;
+
 class JwtTokenProviderTest {
 
     private JwtTokenProvider jwtTokenProvider;
@@ -15,8 +17,11 @@ class JwtTokenProviderTest {
 
     @BeforeEach
     void setUp() {
-        jwtTokenProvider = new JwtTokenProvider(TEST_SECRET, EXPIRATION_MS);
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("dev");
+        jwtTokenProvider = new JwtTokenProvider(TEST_SECRET, EXPIRATION_MS, env);
     }
+
 
     @Test
     void shouldGenerateAndValidateToken() {
@@ -42,8 +47,10 @@ class JwtTokenProviderTest {
     
     @Test
     void shouldRejectExpiredToken() throws InterruptedException {
-        // Set a very short expiration time (1ms)
-        JwtTokenProvider shortLivedProvider = new JwtTokenProvider(TEST_SECRET, 1);
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("dev");
+        JwtTokenProvider shortLivedProvider = new JwtTokenProvider(TEST_SECRET, 1, env);
+
         String token = shortLivedProvider.generateToken("test@example.com", "ROLE_USER");
         
         Thread.sleep(10); // Wait for token to expire

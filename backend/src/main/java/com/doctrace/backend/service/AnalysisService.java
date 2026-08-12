@@ -61,11 +61,13 @@ public class AnalysisService {
 
     /**
      * Analyze an invoice via the AI service.
-     * The workflow: mark ANALYZING → call AI → persist result → create alert if needed → mark ANALYZED.
+     * The workflow: mark ANALYZING → call AI → persist result → create alert if needed → mark ANALYZED → clean up temporary document file.
      */
     public AnalysisResultResponse analyzeInvoice(Long invoiceId, User requestedBy) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+
+        validateAccess(invoice, requestedBy);
 
         // Validate state transition
         if (invoice.getStatus() == InvoiceStatus.ANALYZING) {
@@ -90,15 +92,43 @@ public class AnalysisService {
             );
 
             // Persist results
-            return persistAnalysisResult(invoice, aiResponse, requestedBy);
+            AnalysisResultResponse response = persistAnalysisResult(invoice, aiResponse, requestedBy);
+
+            // Clean up temporary uploaded file binary from disk per lifecycle requirement
+            cleanupTemporaryFile(invoice);
+
+            return response;
 
         } catch (AiServiceException e) {
             // Mark as FAILED and persist error
             markFailed(invoice, e.getMessage());
+            cleanupTemporaryFile(invoice);
             throw e;
         } catch (Exception e) {
             markFailed(invoice, e.getMessage());
+            cleanupTemporaryFile(invoice);
             throw new AiServiceException("Analysis failed: " + e.getMessage(), e);
+        }
+    }
+
+    private void cleanupTemporaryFile(Invoice invoice) {
+        if (invoice.getStoredFilename() != null) {
+            try {
+                fileStorageService.delete(invoice.getStoredFilename());
+                log.info("Temporary invoice file binary cleaned up from disk: invoiceId={}, documentId={}",
+                        invoice.getId(), invoice.getDocumentId());
+            } catch (Exception e) {
+                log.warn("Failed to clean up temporary invoice file: {}", invoice.getStoredFilename(), e);
+            }
+        }
+    }
+
+    private void validateAccess(Invoice invoice, User user) {
+        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+            return;
+        }
+        if (invoice.getUploadedBy() == null || !invoice.getUploadedBy().getId().equals(user.getId())) {
+            throw new ResourceNotFoundException("Invoice", "id", invoice.getId());
         }
     }
 
@@ -178,11 +208,10 @@ public class AnalysisService {
         }
     }
 
-    public AnalysisResultResponse getLatestAnalysis(Long invoiceId) {
-        // Verify invoice exists
-        if (!invoiceRepository.existsById(invoiceId)) {
-            throw new ResourceNotFoundException("Invoice", "id", invoiceId);
-        }
+    public AnalysisResultResponse getLatestAnalysis(Long invoiceId, User user) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        validateAccess(invoice, user);
 
         AnalysisResult result = analysisResultRepository
                 .findTopByInvoiceIdOrderByCreatedAtDesc(invoiceId)
@@ -196,13 +225,15 @@ public class AnalysisService {
         return entityMapper.toAnalysisResultResponse(result);
     }
 
-    public List<AnalysisResultResponse> getAnalysisHistory(Long invoiceId) {
-        if (!invoiceRepository.existsById(invoiceId)) {
-            throw new ResourceNotFoundException("Invoice", "id", invoiceId);
-        }
+    public List<AnalysisResultResponse> getAnalysisHistory(Long invoiceId, User user) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        validateAccess(invoice, user);
+
         return analysisResultRepository.findByInvoiceIdOrderByCreatedAtDesc(invoiceId)
                 .stream()
                 .map(entityMapper::toAnalysisResultResponse)
                 .toList();
     }
+
 }

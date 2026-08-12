@@ -32,5 +32,17 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             """)
     Page<Invoice> search(@Param("query") String query, Pageable pageable);
 
+    @Query("""
+            SELECT i FROM Invoice i
+            WHERE i.uploadedBy.id = :userId
+              AND (:query IS NULL
+                OR LOWER(i.documentId) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(i.originalFilename) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(i.patientName) LIKE LOWER(CONCAT('%', :query, '%')))
+            """)
+    Page<Invoice> searchForUser(@Param("query") String query, @Param("userId") Long userId, Pageable pageable);
+
     long countByStatus(InvoiceStatus status);
 }
+

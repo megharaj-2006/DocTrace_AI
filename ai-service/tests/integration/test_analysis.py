@@ -4,11 +4,12 @@ import io
 
 
 def test_analyze_valid_multipart_input(client, sample_pdf_content):
-    """Test POST /api/v1/analyze with valid file and documentId."""
+    """Test POST /api/v1/analyze with valid file, documentId, and valid X-Internal-API-Key."""
     files = {"file": ("test_invoice.pdf", io.BytesIO(sample_pdf_content), "application/pdf")}
     data = {"documentId": "INV-123"}
+    headers = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
 
-    response = client.post("/api/v1/analyze", files=files, data=data)
+    response = client.post("/api/v1/analyze", files=files, data=data, headers=headers)
     assert response.status_code == 200, response.text
 
     body = response.json()
@@ -26,17 +27,32 @@ def test_analyze_valid_multipart_input(client, sample_pdf_content):
         assert "similarity" in match
 
 
+def test_analyze_unauthorized_rejected(client, sample_pdf_content):
+    """Test POST /api/v1/analyze fails with 401 when X-Internal-API-Key header is missing or wrong."""
+    files = {"file": ("test_invoice.pdf", io.BytesIO(sample_pdf_content), "application/pdf")}
+    data = {"documentId": "INV-123"}
+
+    response = client.post("/api/v1/analyze", files=files, data=data)
+    assert response.status_code == 401
+
+    headers = {"X-Internal-API-Key": "wrong-key"}
+    response = client.post("/api/v1/analyze", files=files, data=data, headers=headers)
+    assert response.status_code == 401
+
+
 def test_analyze_missing_file_rejected(client):
     """Test POST /api/v1/analyze fails when file is missing."""
     data = {"documentId": "INV-123"}
-    response = client.post("/api/v1/analyze", data=data)
+    headers = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
+    response = client.post("/api/v1/analyze", data=data, headers=headers)
     assert response.status_code == 422
 
 
 def test_analyze_missing_document_id_rejected(client, sample_pdf_content):
     """Test POST /api/v1/analyze fails when documentId is missing."""
     files = {"file": ("test_invoice.pdf", io.BytesIO(sample_pdf_content), "application/pdf")}
-    response = client.post("/api/v1/analyze", files=files)
+    headers = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
+    response = client.post("/api/v1/analyze", files=files, headers=headers)
     assert response.status_code in [400, 422]
 
 
@@ -44,7 +60,9 @@ def test_analyze_empty_file_rejected(client):
     """Test POST /api/v1/analyze rejects empty (0-byte) file."""
     files = {"file": ("empty.pdf", io.BytesIO(b""), "application/pdf")}
     data = {"documentId": "INV-123"}
+    headers = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
 
-    response = client.post("/api/v1/analyze", files=files, data=data)
+    response = client.post("/api/v1/analyze", files=files, data=data, headers=headers)
     assert response.status_code == 400
     assert "empty" in response.json()["detail"].lower()
+
