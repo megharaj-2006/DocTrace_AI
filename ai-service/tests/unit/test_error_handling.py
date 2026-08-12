@@ -35,12 +35,16 @@ class FailingVectorStore(VectorStore):
         raise ProcessingException("Qdrant failure")
 
 
+AUTH_HEADERS = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
+
+
 def test_empty_document_id_raises_http_400(client, sample_png_content):
     """Verify empty documentId raises HTTP 400 Bad Request."""
     response = client.post(
         "/api/v1/analyze",
         data={"documentId": "   "},
         files={"file": ("invoice.png", sample_png_content, "image/png")},
+        headers=AUTH_HEADERS,
     )
     assert response.status_code == 400
     assert "documentId parameter is required" in response.json()["detail"]
@@ -52,6 +56,7 @@ def test_empty_file_raises_http_400(client):
         "/api/v1/analyze",
         data={"documentId": "INV-EMPTY"},
         files={"file": ("empty.png", b"", "image/png")},
+        headers=AUTH_HEADERS,
     )
     assert response.status_code == 400
     assert "Uploaded file is empty" in response.json()["detail"]
@@ -63,10 +68,10 @@ def test_unsupported_file_format_raises_http_400(client):
         "/api/v1/analyze",
         data={"documentId": "INV-TXT"},
         files={"file": ("notes.txt", b"some text content", "text/plain")},
+        headers=AUTH_HEADERS,
     )
     assert response.status_code == 400
     assert "Unsupported document format" in response.json()["detail"]
-
 
 
 def test_qdrant_infrastructure_failure_surfaces_as_http_500(client, sample_png_content):
@@ -82,8 +87,10 @@ def test_qdrant_infrastructure_failure_surfaces_as_http_500(client, sample_png_c
             "/api/v1/analyze",
             data={"documentId": "INV-FAIL-QDRANT"},
             files={"file": ("invoice.png", sample_png_content, "image/png")},
+            headers=AUTH_HEADERS,
         )
         assert response.status_code == 500
         assert "Qdrant" in response.json()["detail"] or "Failed to process document" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+

@@ -32,8 +32,9 @@ def test_analyze_api_with_phase1_pipeline(client, sample_pdf_content):
     """Verify POST /api/v1/analyze invokes Phase 1 pipeline and retains response contract."""
     files = {"file": ("invoice.pdf", io.BytesIO(sample_pdf_content), "application/pdf")}
     data = {"documentId": "INV-PHASE1-100"}
+    headers = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
 
-    response = client.post("/api/v1/analyze", files=files, data=data)
+    response = client.post("/api/v1/analyze", files=files, data=data, headers=headers)
     assert response.status_code == 200, response.text
 
     body = response.json()
@@ -41,3 +42,4 @@ def test_analyze_api_with_phase1_pipeline(client, sample_pdf_content):
     assert body["riskLevel"] in ["LOW", "AMBER", "RED"]
     assert isinstance(body["matchedDocuments"], list)
     assert isinstance(body["reasons"], list)
+
