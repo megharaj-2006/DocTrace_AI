@@ -1,0 +1,27 @@
+# ==============================================================================
+# DocTrace AI Backend — Development Profile
+# ==============================================================================
+# Activate: ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:doctrace_dev}
+    username: ${DB_USERNAME:doctrace}
+    password: ${DB_PASSWORD:doctrace}
+    hikari:
+      maximum-pool-size: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.doctrace.backend: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
