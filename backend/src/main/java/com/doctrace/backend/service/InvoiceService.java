@@ -2,6 +2,7 @@ package com.doctrace.backend.service;
 
 import com.doctrace.backend.entity.Invoice;
 import com.doctrace.backend.entity.InvoiceStatus;
+import com.doctrace.backend.entity.Role;
 import com.doctrace.backend.entity.User;
 import com.doctrace.backend.exception.ResourceNotFoundException;
 import com.doctrace.backend.repository.InvoiceRepository;
@@ -17,7 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
 /**
- * Invoice lifecycle management: upload, retrieval, search, deletion.
+ * Invoice lifecycle management: upload, retrieval, search.
  */
 @Service
 public class InvoiceService {
@@ -87,7 +88,7 @@ public class InvoiceService {
     }
 
     public Page<Invoice> findAllForUser(User user, Pageable pageable) {
-        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+        if (user.getRole() == Role.ADMIN || user.getRole() == Role.INVESTIGATOR) {
             return invoiceRepository.findAll(pageable);
         }
         return invoiceRepository.findByUploadedById(user.getId(), pageable);
@@ -106,20 +107,21 @@ public class InvoiceService {
     }
 
     public Page<Invoice> searchForUser(String query, User user, Pageable pageable) {
-        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+        if (user.getRole() == Role.ADMIN || user.getRole() == Role.INVESTIGATOR) {
             return invoiceRepository.search(query, pageable);
         }
         return invoiceRepository.searchForUser(query, user.getId(), pageable);
     }
 
     public void validateAccess(Invoice invoice, User user) {
-        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+        if (user.getRole() == Role.ADMIN || user.getRole() == Role.INVESTIGATOR) {
             return;
         }
         if (invoice.getUploadedBy() == null || !invoice.getUploadedBy().getId().equals(user.getId())) {
             throw new ResourceNotFoundException("Invoice", "id", invoice.getId());
         }
     }
+
 
 
     private String generateDocumentId() {

@@ -124,9 +124,10 @@ public class AnalysisService {
     }
 
     private void validateAccess(Invoice invoice, User user) {
-        if (user.getRole() == Role.ROLE_ADMIN || user.getRole() == Role.ROLE_INVESTIGATOR) {
+        if (user.getRole() == Role.ADMIN || user.getRole() == Role.INVESTIGATOR) {
             return;
         }
+
         if (invoice.getUploadedBy() == null || !invoice.getUploadedBy().getId().equals(user.getId())) {
             throw new ResourceNotFoundException("Invoice", "id", invoice.getId());
         }
