@@ -1,0 +1,15 @@
+{
+  "baseline_ram_mb": 424.86,
+  "model_name": "facebook/dinov2-base",
+  "device_resolved": "cpu",
+  "model_load_latency_s": 2.487,
+  "ram_after_model_load_mb": 435.05,
+  "model_ram_overhead_mb": 10.19,
+  "single_page_embedding_latency_avg_ms": 765.67,
+  "single_page_embedding_latency_min_ms": 755.01,
+  "single_page_embedding_latency_max_ms": 782.42,
+  "peak_ram_during_embedding_mb": 785.23,
+  "cuda_available": false,
+  "gpu_name": "NOT AVAILABLE",
+  "vram_allocated_mb": "NOT AVAILABLE"
+}
