@@ -1,0 +1,38 @@
+# ==============================================================================
+# DocTrace AI Backend — Test Profile
+# ==============================================================================
+# Activated automatically by @SpringBootTest and test-scoped configs
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:doctrace_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+doctrace:
+  jwt:
+    secret: test-secret-key-for-unit-tests-only-must-be-at-least-64-characters-long-1234567890
+    expiration-ms: 3600000
+
+  ai-service:
+    url: http://localhost:9999
+    connect-timeout-ms: 1000
+    read-timeout-ms: 5000
+
+  storage:
+    upload-dir: ${java.io.tmpdir}/doctrace-test-uploads
+
+  cors:
+    allowed-origins: http://localhost:3000
+
+logging:
+  level:
+    com.doctrace.backend: WARN
+    org.springframework.security: WARN
