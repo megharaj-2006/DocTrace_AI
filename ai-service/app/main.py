@@ -15,6 +15,12 @@ from app.core.logging import logger, setup_logging
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan setup and teardown."""
+    import time
+    from app.models.dinov2_manager import DINOv2Manager
+    from app.document_processing.layout_detector import LayoutDetector
+    from app.document_processing.ocr_service import OCRService
+
+    app.state.is_warmed_up = False
     setup_logging()
     logger.info(
         "Starting %s [env=%s, host=%s, port=%s]",
@@ -23,8 +29,44 @@ async def lifespan(app: FastAPI):
         settings.HOST,
         settings.PORT,
     )
+
+    warmup_start = time.time()
+    logger.info("Initiating sequential application-scoped model warmup...")
+
+    warmed_ok = True
+
+    # 1. Warm up DINOv2Manager
+    try:
+        t0 = time.time()
+        DINOv2Manager.get_instance()
+        logger.info("DINOv2Manager warmup completed in %.2f ms.", (time.time() - t0) * 1000)
+    except Exception as err:
+        warmed_ok = False
+        logger.error("DINOv2Manager warmup error: %s", str(err), exc_info=True)
+
+    # 2. Warm up LayoutDetector
+    try:
+        t0 = time.time()
+        LayoutDetector.get_instance()._ensure_engine_loaded()
+        logger.info("LayoutDetector warmup completed in %.2f ms.", (time.time() - t0) * 1000)
+    except Exception as err:
+        warmed_ok = False
+        logger.error("LayoutDetector warmup error: %s", str(err), exc_info=True)
+
+    # 3. Warm up OCRService
+    try:
+        t0 = time.time()
+        OCRService.get_instance()._ensure_engine_loaded()
+        logger.info("OCRService warmup completed in %.2f ms.", (time.time() - t0) * 1000)
+    except Exception as err:
+        warmed_ok = False
+        logger.error("OCRService warmup error: %s", str(err), exc_info=True)
+
+    app.state.is_warmed_up = warmed_ok
+    logger.info("Sequential model startup warmup completed in %.2f s (ready=%s).", time.time() - warmup_start, warmed_ok)
     yield
     logger.info("Shutting down %s", settings.SERVICE_NAME)
+
 
 
 def create_app() -> FastAPI:

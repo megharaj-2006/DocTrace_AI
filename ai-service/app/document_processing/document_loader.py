@@ -35,18 +35,23 @@ class DocumentLoader:
 
         try:
             if ext in {".jpg", ".jpeg", ".png"}:
-                # Single page image input
-                with Image.open(file_path) as img:
-                    img.verify()
+                # Single page image input with corruption validation
+                try:
+                    with Image.open(file_path) as img:
+                        img.verify()
 
-                with Image.open(file_path) as img:
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=".png", dir=self.temp_dir
-                    ) as tmp:
-                        img_copy_path = tmp.name
-                        img.save(img_copy_path, format="PNG")
-                        created_temp_files.append(img_copy_path)
-                        page_entries.append((1, img_copy_path))
+                    with Image.open(file_path) as img:
+                        with tempfile.NamedTemporaryFile(
+                            delete=False, suffix=".png", dir=self.temp_dir
+                        ) as tmp:
+                            img_copy_path = tmp.name
+                            img.save(img_copy_path, format="PNG")
+                            created_temp_files.append(img_copy_path)
+                            page_entries.append((1, img_copy_path))
+                except InvalidInputException:
+                    raise
+                except Exception as img_err:
+                    raise InvalidInputException(f"Failed to open or process corrupted image document: {str(img_err)}")
 
             elif ext == ".pdf":
                 if pdfium is None:
