@@ -114,3 +114,4 @@ temp/
 *.sqlite
 *.sqlite3
 *.db
+dataset/raw/original/fatura_dataset/images/

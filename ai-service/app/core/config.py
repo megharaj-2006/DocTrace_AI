@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     LOG_LEVEL: str = "INFO"
     TEMP_DIR: Optional[str] = None
+    INTERNAL_API_KEY: str = "dev-internal-secret-key-12345"
 
     # Phase 2A Vector Intelligence Configuration
     EMBEDDING_DEVICE: str = "auto"  # "auto", "cpu", or "cuda"

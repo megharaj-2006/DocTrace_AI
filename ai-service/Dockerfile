@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PORT=8000 \
+    FLAGS_use_mkldnn=0 \
     FLAGS_use_onednn=0 \
     FLAGS_enable_pir_api=0 \
     FLAGS_enable_pir_in_executor=0 \

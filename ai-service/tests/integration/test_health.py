@@ -8,3 +8,14 @@ def test_health_check_endpoint(client):
     data = response.json()
     assert data["status"] == "ok"
     assert data["service"] == "doctrace-ai-service"
+
+
+def test_readiness_check_endpoint(client):
+    """Test GET /readiness returns readiness state."""
+    response = client.get("/readiness")
+    assert response.status_code in (200, 503)
+    data = response.json()
+    assert "status" in data
+    assert data["service"] == "doctrace-ai-service"
+    assert "details" in data
+
