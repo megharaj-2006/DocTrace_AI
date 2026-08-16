@@ -15,6 +15,7 @@ from app.schemas.similarity import SimilarityEvidence
 from app.services.vector_intelligence_service import VectorIntelligenceService
 from app.vector_store.base import VectorStore
 from app.vector_store.mock import MockVectorStore
+from app.vector_store.qdrant import QdrantVectorStore
 
 
 class AnalysisService:
@@ -26,11 +27,18 @@ class AnalysisService:
         document_processor: Optional[DocumentProcessor] = None,
         vector_intelligence_service: Optional[VectorIntelligenceService] = None,
     ):
-        self.vector_store = vector_store or MockVectorStore()
+        self.vector_store = vector_store or self._create_vector_store()
         self.document_processor = document_processor or DocumentProcessor()
         self.vector_intelligence_service = vector_intelligence_service or VectorIntelligenceService(
             vector_store=self.vector_store
         )
+
+    @staticmethod
+    def _create_vector_store() -> VectorStore:
+        """Select the configured store while retaining a dependency-free local default."""
+        if settings.VECTOR_STORE_BACKEND.lower() == "qdrant":
+            return QdrantVectorStore()
+        return MockVectorStore()
 
     def validate_input(self, file: UploadFile, document_id: str) -> None:
         """Validate basic request inputs for Phase 1 and Phase 2B."""
@@ -96,6 +104,17 @@ class AnalysisService:
                     )
                     evidence = future.result(timeout=60)
                     evidences.append(evidence)
+
+                    # Register only after the search so a document cannot match itself.
+                    registration = asyncio.run_coroutine_threadsafe(
+                        self.vector_intelligence_service.register_page_embedding(
+                            image_input=temp_img_path,
+                            document_id=document_id,
+                            page_number=page_num,
+                        ),
+                        main_loop,
+                    )
+                    registration.result(timeout=60)
                 except Exception as err:
                     logger.error(
                         "Error running Phase 2A vector search for docId='%s' page=%d: %s",

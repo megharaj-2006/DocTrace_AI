@@ -26,8 +26,14 @@ async def verify_internal_api_key(x_internal_api_key: str = Header(None, alias="
 
 
 def get_analysis_service() -> AnalysisService:
-    """Dependency injector for AnalysisService."""
-    return AnalysisService()
+    """Dependency injector for the application-scoped analysis service."""
+    global _analysis_service
+    if _analysis_service is None:
+        _analysis_service = AnalysisService()
+    return _analysis_service
+
+
+_analysis_service: AnalysisService | None = None
 
 
 @router.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(verify_internal_api_key)])

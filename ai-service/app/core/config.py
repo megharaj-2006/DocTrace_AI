@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     QDRANT_URL: Optional[str] = None
     QDRANT_API_KEY: Optional[str] = None
     QDRANT_COLLECTION: str = "invoice_page_embeddings_v1"
+    VECTOR_STORE_BACKEND: str = "mock"
     SIMILARITY_THRESHOLD: float = 0.955
 
 

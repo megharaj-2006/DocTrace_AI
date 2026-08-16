@@ -12,11 +12,9 @@ export const getInvoiceById = async (id) => {
   return response.data;
 };
 
-export const uploadInvoice = async (file, documentId, provider) => {
+export const uploadInvoice = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("documentId", documentId);
-  formData.append("provider", provider);
   const response = await axiosInstance.post("/invoices", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });

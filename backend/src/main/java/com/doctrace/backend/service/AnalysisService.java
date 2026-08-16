@@ -94,19 +94,14 @@ public class AnalysisService {
             // Persist results
             AnalysisResultResponse response = persistAnalysisResult(invoice, aiResponse, requestedBy);
 
-            // Clean up temporary uploaded file binary from disk per lifecycle requirement
-            cleanupTemporaryFile(invoice);
-
             return response;
 
         } catch (AiServiceException e) {
             // Mark as FAILED and persist error
             markFailed(invoice, e.getMessage());
-            cleanupTemporaryFile(invoice);
             throw e;
         } catch (Exception e) {
             markFailed(invoice, e.getMessage());
-            cleanupTemporaryFile(invoice);
             throw new AiServiceException("Analysis failed: " + e.getMessage(), e);
         }
     }

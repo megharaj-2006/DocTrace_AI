@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getInvoices, uploadInvoice } from "../api/invoiceApi";
+import { getInvoices, uploadInvoice, analyzeInvoice } from "../api/invoiceApi";
 
 const RiskBadge = ({ risk }) => {
   if (!risk) return null;
@@ -34,8 +34,6 @@ export default function InvoicesPage() {
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [documentId, setDocumentId] = useState("");
-  const [provider, setProvider] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
   const [page, setPage] = useState(0);
@@ -79,19 +77,15 @@ export default function InvoicesPage() {
 
   const handleUpload = async () => {
     if (!selectedFile) return;
-    if (!documentId.trim()) { setUploadError("Document ID is required."); return; }
-    if (!provider.trim()) { setUploadError("Provider is required."); return; }
-
     setUploading(true);
     setUploadError("");
     setUploadSuccess("");
 
     try {
-      await uploadInvoice(selectedFile, documentId, provider);
-      setUploadSuccess("Invoice uploaded successfully! Analysis will begin shortly.");
+      const invoice = await uploadInvoice(selectedFile);
+      await analyzeInvoice(invoice.id);
+      setUploadSuccess("Invoice uploaded and analyzed successfully.");
       setSelectedFile(null);
-      setDocumentId("");
-      setProvider("");
       setShowUpload(false);
       fetchInvoices(); // refresh list
     } catch (err) {
@@ -179,29 +173,7 @@ export default function InvoicesPage() {
                 <input id="fileInput" type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileInput} />
               </div>
 
-              {/* Document ID + Provider */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Document ID *</label>
-                  <input
-                    type="text"
-                    value={documentId}
-                    onChange={(e) => setDocumentId(e.target.value)}
-                    placeholder="e.g. INV-2026-0001"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Provider *</label>
-                  <input
-                    type="text"
-                    value={provider}
-                    onChange={(e) => setProvider(e.target.value)}
-                    placeholder="e.g. Apollo Hospitals"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
+              <p className="text-xs text-gray-400">A document ID is generated automatically. Provider details can be added during investigation.</p>
 
               <button
                 onClick={handleUpload}

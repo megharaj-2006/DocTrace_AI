@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: doctrace_prod
       POSTGRES_USER: doctrace
-      POSTGRES_PASSWORD: doctrace_secure_password_123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
@@ -20,7 +18,7 @@ services:
       retries: 5
 
   qdrant:
-    image: qdrant/qdrant:v1.8.4
+    image: qdrant/qdrant:v1.10.1
     container_name: doctrace-qdrant
     restart: always
     ports:
@@ -45,8 +43,9 @@ services:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION=invoice_page_embeddings_v1
+      - VECTOR_STORE_BACKEND=qdrant
       - SIMILARITY_THRESHOLD=0.955
-      - INTERNAL_API_KEY=dev-internal-secret-key-12345
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
     depends_on:
       - qdrant
 
@@ -64,10 +63,10 @@ services:
       - DB_PORT=5432
       - DB_NAME=doctrace_prod
       - DB_USERNAME=doctrace
-      - DB_PASSWORD=doctrace_secure_password_123
-      - JWT_SECRET=CHANGE_ME_IN_PRODUCTION_use_a_64_char_minimum_secret_key_here_abc123_prod_sec_key
+      - DB_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - AI_SERVICE_URL=http://ai-service:8000
-      - INTERNAL_API_KEY=dev-internal-secret-key-12345
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
       - UPLOAD_DIR=storage/uploads
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
     depends_on:
@@ -75,6 +74,17 @@ services:
         condition: service_healthy
       ai-service:
         condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: doctrace-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
 
 volumes:
   qdrant_storage:
