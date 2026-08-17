@@ -4,6 +4,7 @@ from fastapi import APIRouter, File, Form, UploadFile, Depends, Header, HTTPExce
 from app.core.config import settings
 from app.schemas.analysis import AnalysisResponse
 from app.services.analysis_service import AnalysisService
+from app.vector_store.qdrant import QdrantVectorStore
 
 router = APIRouter(prefix="/api/v1", tags=["Analysis"])
 
@@ -26,8 +27,14 @@ async def verify_internal_api_key(x_internal_api_key: str = Header(None, alias="
 
 
 def get_analysis_service() -> AnalysisService:
-    """Dependency injector for AnalysisService."""
-    return AnalysisService()
+    """Dependency injector for AnalysisService.
+
+    Instantiates QdrantVectorStore using QDRANT_HOST / QDRANT_PORT / QDRANT_COLLECTION
+    from environment (set to 'qdrant' service name in docker-compose for container networking).
+    This single change propagates through the full AnalysisService -> VectorIntelligenceService
+    dependency chain, replacing MockVectorStore everywhere in the production path.
+    """
+    return AnalysisService(vector_store=QdrantVectorStore())
 
 
 @router.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(verify_internal_api_key)])

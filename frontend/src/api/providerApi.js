@@ -11,3 +11,10 @@ export const getProviderById = async (id) => {
   const response = await axiosInstance.get(`/providers/${id}`);
   return response.data;
 };
+
+export const getProviderInvoices = async (id, page = 0, size = 10) => {
+  const response = await axiosInstance.get(`/providers/${id}/invoices`, {
+    params: { page, size },
+  });
+  return response.data;
+};
