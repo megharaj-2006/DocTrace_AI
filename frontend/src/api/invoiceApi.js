@@ -31,7 +31,17 @@ export const getInvoiceAnalysis = async (id) => {
   return response.data;
 };
 
+export const getAnalysisHistory = async (id) => {
+  const response = await axiosInstance.get(`/invoices/${id}/analysis/history`);
+  return response.data;
+};
+
 export const getSimilarInvoices = async (id) => {
   const response = await axiosInstance.get(`/invoices/${id}/similar`);
+  return response.data;
+};
+
+export const getAnalyses = async () => {
+  const response = await axiosInstance.get("/analysis");
   return response.data;
 };

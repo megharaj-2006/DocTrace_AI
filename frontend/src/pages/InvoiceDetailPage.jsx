@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoiceById, getInvoiceAnalysis } from "../api/invoiceApi";
+import { getInvoiceById, getInvoiceAnalysis, getAnalysisHistory, analyzeInvoice } from "../api/invoiceApi";
 
 const RiskBadge = ({ risk }) => {
   if (!risk) return null;
@@ -26,8 +26,11 @@ export default function InvoiceDetailPage() {
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState(null);
   const [analysis, setAnalysis] = useState(null);
+  const [isHistoricalAnalysis, setIsHistoricalAnalysis] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,9 +42,25 @@ export default function InvoiceDetailPage() {
         try {
           const anal = await getInvoiceAnalysis(id);
           setAnalysis(anal);
+          setIsHistoricalAnalysis(false);
         } catch {
-          // Analysis not ready yet — that's fine
-          setAnalysis(null);
+          // Try to get history if latest analysis doesn't exist
+          try {
+            const history = await getAnalysisHistory(id);
+            if (history && history.length > 0) {
+              // Show the most recent analysis from history
+              setAnalysis(history[0]);
+              setIsHistoricalAnalysis(true);
+            } else {
+              setAnalysis(null);
+              setIsHistoricalAnalysis(false);
+              setAnalysisError("No AI analysis available for this document.");
+            }
+          } catch {
+            setAnalysis(null);
+            setIsHistoricalAnalysis(false);
+            setAnalysisError("No AI analysis available for this document.");
+          }
         }
       } catch (err) {
         setError("Failed to load invoice details.");
@@ -52,6 +71,20 @@ export default function InvoiceDetailPage() {
     };
     fetchData();
   }, [id]);
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    try {
+      const result = await analyzeInvoice(id);
+      setAnalysis(result);
+      setAnalysisError("");
+    } catch (err) {
+      setAnalysisError("Failed to analyze document. Please try again.");
+      console.error(err);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -151,6 +184,48 @@ export default function InvoiceDetailPage() {
           {/* Analysis Results */}
           {analysis ? (
             <>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-gray-800">AI Analysis Result</h3>
+                      {isHistoricalAnalysis && (
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-xs rounded font-medium">Previous</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Analyzed {analysis.analyzedAt ? new Date(analysis.analyzedAt).toLocaleString() : "just now"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RiskBadge risk={risk} />
+                    {isHistoricalAnalysis && (
+                      <button
+                        onClick={handleAnalyze}
+                        disabled={analyzing}
+                        className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        {analyzing ? "Analyzing..." : "Re-analyze"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-xs text-gray-400">Fraud score</p>
+                    <p className={`mt-1 text-xl font-bold ${riskColor}`}>{(analysis.fraudScore * 100).toFixed(1)}%</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-xs text-gray-400">Confidence</p>
+                    <p className="mt-1 text-xl font-bold text-blue-500">{(analysis.confidence * 100).toFixed(1)}%</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-xs text-gray-400">Similar documents</p>
+                    <p className="mt-1 text-xl font-bold text-gray-800">{analysis.matchedDocuments?.length || 0}</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Reasons */}
               {analysis.reasons?.length > 0 && (
                 <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -189,14 +264,14 @@ export default function InvoiceDetailPage() {
                       {analysis.matchedDocuments.map((m, i) => (
                         <tr key={i} className="hover:bg-gray-50">
                           <td className="py-3 text-xs text-gray-500">{i + 1}</td>
-                          <td className="py-3 text-xs text-blue-600 font-medium">{m.documentId}</td>
+                          <td className="py-3 text-xs text-blue-600 font-medium">{m.matchedDocumentId || m.documentId}</td>
                           <td className="py-3 w-40">
                             <span className={`text-xs font-bold ${m.similarity >= 0.955 ? "text-red-500" : m.similarity >= 0.90 ? "text-amber-500" : "text-green-500"}`}>
                               {m.similarity?.toFixed(3)}
                             </span>
                             <ScoreBar score={m.similarity} />
                           </td>
-                          <td className="py-3"><RiskBadge risk={m.riskLevel} /></td>
+                          <td className="py-3"><RiskBadge risk={m.riskLevel || (m.similarity >= 0.955 ? "RED" : m.similarity >= 0.90 ? "AMBER" : "LOW")} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -207,10 +282,18 @@ export default function InvoiceDetailPage() {
           ) : (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center">
               <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0m-9 5a4 4 0 100-8 4 4 0 000 8z" />
               </svg>
-              <p className="text-gray-500 font-medium text-sm">No analysis available yet</p>
-              <p className="text-gray-400 text-xs mt-1">Analysis will appear here once processing is complete</p>
+              <p className="text-gray-500 font-medium text-sm">Ready for AI Analysis</p>
+              <p className="text-gray-400 text-xs mt-2 max-w-sm mx-auto">This document has been uploaded but hasn't been analyzed yet. Click the button below to run AI analysis and get fraud detection results.</p>
+              {analysisError && <p className="mt-2 text-xs text-amber-600">{analysisError}</p>}
+              <button 
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {analyzing ? "Analyzing..." : "Start Analysis"}
+              </button>
             </div>
           )}
         </div>
