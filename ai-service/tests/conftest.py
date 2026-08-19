@@ -16,6 +16,15 @@ from app.services.analysis_service import AnalysisService
 from app.vector_store.mock import MockVectorStore
 
 
+@pytest.fixture(autouse=True)
+def setup_test_dependency_overrides(mock_vector_store):
+    """Automatically override AnalysisService with MockVectorStore for all tests to isolate from external vector DBs."""
+    from app.api.routes.analysis import get_analysis_service
+    app.dependency_overrides[get_analysis_service] = lambda: AnalysisService(vector_store=mock_vector_store)
+    yield mock_vector_store
+    app.dependency_overrides.clear()
+
+
 @pytest.fixture
 def client():
     """FastAPI TestClient fixture."""

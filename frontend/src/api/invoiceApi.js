@@ -31,7 +31,21 @@ export const getInvoiceAnalysis = async (id) => {
   return response.data;
 };
 
-export const getSimilarInvoices = async (id) => {
-  const response = await axiosInstance.get(`/invoices/${id}/similar`);
+export const searchInvoices = async (query = "", page = 0, size = 10) => {
+  const response = await axiosInstance.get("/invoices/search", {
+    params: { query, page, size },
+  });
+  return response.data;
+};
+
+export const getInvoiceAnalysisHistory = async (id) => {
+  const response = await axiosInstance.get(`/invoices/${id}/analysis/history`);
+  return response.data;
+};
+
+export const downloadInvoiceFile = async (id) => {
+  const response = await axiosInstance.get(`/invoices/${id}/file`, {
+    responseType: "blob",
+  });
   return response.data;
 };

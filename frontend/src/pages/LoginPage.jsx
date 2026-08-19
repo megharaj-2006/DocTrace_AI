@@ -37,7 +37,6 @@ export default function LoginPage() {
         err.response?.data?.error ||
         "Invalid email or password.";
       setError(msg);
-      setError(msg);
     } finally {
       setLoading(false);
     }
