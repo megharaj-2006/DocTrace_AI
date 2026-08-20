@@ -26,16 +26,22 @@ export const updateAlertStatus = async (id, status, notes = "") => {
   return response.data;
 };
 
-export const resolveAlert = async (id, resolutionNotes) => {
+export const resolveAlert = async (id, resolutionNotes = "") => {
+  const resolution = typeof resolutionNotes === "object" 
+    ? (resolutionNotes.resolution || resolutionNotes.resolutionNotes || "") 
+    : resolutionNotes;
   const response = await axiosInstance.post(`/alerts/${id}/resolve`, {
-    resolutionNotes,
+    resolution: resolution || "Claim verified and resolved by investigator.",
   });
   return response.data;
 };
 
-export const dismissAlert = async (id, reason) => {
+export const dismissAlert = async (id, reason = "") => {
+  const reasonText = typeof reason === "object" 
+    ? (reason.reason || "") 
+    : reason;
   const response = await axiosInstance.post(`/alerts/${id}/dismiss`, {
-    reason,
+    reason: reasonText || "False positive template similarity.",
   });
   return response.data;
 };
