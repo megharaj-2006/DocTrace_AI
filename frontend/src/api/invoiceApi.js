@@ -1,4 +1,4 @@
-import axiosInstance from "./axiosInstance";
+﻿import axiosInstance from "./axiosInstance";
 
 export const getInvoices = async (page = 0, size = 10) => {
   const response = await axiosInstance.get("/invoices", {
@@ -12,11 +12,9 @@ export const getInvoiceById = async (id) => {
   return response.data;
 };
 
-export const uploadInvoice = async (file, documentId, provider) => {
+export const uploadInvoice = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("documentId", documentId);
-  formData.append("provider", provider);
   const response = await axiosInstance.post("/invoices", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
@@ -45,9 +43,19 @@ export const getInvoiceAnalysisHistory = async (id) => {
   return response.data;
 };
 
+export const getSimilarInvoices = async (id) => {
+  const response = await axiosInstance.get(`/invoices/${id}/similar`);
+  return response.data;
+};
+
 export const downloadInvoiceFile = async (id) => {
   const response = await axiosInstance.get(`/invoices/${id}/file`, {
     responseType: "blob",
   });
+  return response.data;
+};
+
+export const getAnalyses = async () => {
+  const response = await axiosInstance.get("/analysis");
   return response.data;
 };

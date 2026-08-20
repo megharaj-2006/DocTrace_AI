@@ -26,17 +26,24 @@ async def verify_internal_api_key(x_internal_api_key: str = Header(None, alias="
         )
 
 
+_analysis_service: AnalysisService | None = None
+
+
 def get_analysis_service() -> AnalysisService:
-    """Dependency injector for AnalysisService.
+    """Dependency injector for the application-scoped analysis service.
 
     Instantiates QdrantVectorStore using QDRANT_HOST / QDRANT_PORT / QDRANT_COLLECTION
     from environment (set to 'qdrant' service name in docker-compose for container networking).
     This single change propagates through the full AnalysisService -> VectorIntelligenceService
     dependency chain, replacing MockVectorStore everywhere in the production path.
+
+    The service is cached as a module-level singleton to avoid recreating the Qdrant connection
+    on every request.
     """
-    return AnalysisService(vector_store=QdrantVectorStore())
-
-
+    global _analysis_service
+    if _analysis_service is None:
+        _analysis_service = AnalysisService(vector_store=QdrantVectorStore())
+    return _analysis_service
 @router.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(verify_internal_api_key)])
 async def analyze_invoice(
     file: UploadFile = File(...),

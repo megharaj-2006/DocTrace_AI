@@ -109,5 +109,3 @@ def test_analyze_qdrant_failure_sanitized_500(client, sample_pdf_content):
         data_json = response.json()
         assert "detail" in data_json
         assert "Traceback" not in data_json["detail"]
-
-
