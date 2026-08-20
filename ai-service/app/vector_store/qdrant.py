@@ -292,12 +292,12 @@ class QdrantVectorStore(VectorStore):
             )
 
         try:
-            hits = self.client.search(
+            hits = self.client.query_points(
                 collection_name=struct_col,
-                query_vector=query_vector,
+                query=query_vector,
                 limit=top_k,
                 query_filter=search_filter,
-            )
+            ).points
 
             results: List[PageSimilarityMatch] = []
             for hit in hits:
