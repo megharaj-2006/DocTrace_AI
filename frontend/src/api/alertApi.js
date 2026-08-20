@@ -12,3 +12,30 @@ export const getAlertById = async (id) => {
   const response = await axiosInstance.get(`/alerts/${id}`);
   return response.data;
 };
+
+export const assignAlert = async (id) => {
+  const response = await axiosInstance.post(`/alerts/${id}/assign`);
+  return response.data;
+};
+
+export const updateAlertStatus = async (id, status, notes = "") => {
+  const response = await axiosInstance.patch(`/alerts/${id}/status`, {
+    status,
+    notes,
+  });
+  return response.data;
+};
+
+export const resolveAlert = async (id, resolutionNotes) => {
+  const response = await axiosInstance.post(`/alerts/${id}/resolve`, {
+    resolutionNotes,
+  });
+  return response.data;
+};
+
+export const dismissAlert = async (id, reason) => {
+  const response = await axiosInstance.post(`/alerts/${id}/dismiss`, {
+    reason,
+  });
+  return response.data;
+};

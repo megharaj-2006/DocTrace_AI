@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoiceById, getInvoiceAnalysis, getAnalysisHistory, analyzeInvoice } from "../api/invoiceApi";
+import { getInvoiceById, getInvoiceAnalysis, getInvoiceAnalysisHistory, analyzeInvoice } from "../api/invoiceApi";
 
 const RiskBadge = ({ risk }) => {
   if (!risk) return null;
@@ -46,7 +46,7 @@ export default function InvoiceDetailPage() {
         } catch {
           // Try to get history if latest analysis doesn't exist
           try {
-            const history = await getAnalysisHistory(id);
+            const history = await getInvoiceAnalysisHistory(id);
             if (history && history.length > 0) {
               // Show the most recent analysis from history
               setAnalysis(history[0]);

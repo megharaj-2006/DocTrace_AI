@@ -87,13 +87,13 @@ class AnalysisService:
             # Define page callback for inline Phase 2A vector similarity analysis
             def page_callback(page_num: int, temp_img_path: str):
                 logger.debug(
-                    "Executing Phase 2A page similarity search for docId='%s' page=%d",
+                    "Executing Phase 2A page analyze+register for docId='%s' page=%d",
                     document_id,
                     page_num,
                 )
                 try:
                     future = asyncio.run_coroutine_threadsafe(
-                        self.vector_intelligence_service.analyze_page_similarity(
+                        self.vector_intelligence_service.analyze_and_register_page(
                             image_input=temp_img_path,
                             document_id=document_id,
                             page_number=page_num,
@@ -117,7 +117,7 @@ class AnalysisService:
                     registration.result(timeout=60)
                 except Exception as err:
                     logger.error(
-                        "Error running Phase 2A vector search for docId='%s' page=%d: %s",
+                        "Error running Phase 2A analyze+register for docId='%s' page=%d: %s",
                         document_id,
                         page_num,
                         str(err),

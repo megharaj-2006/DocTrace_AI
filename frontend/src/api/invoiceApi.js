@@ -1,4 +1,4 @@
-import axiosInstance from "./axiosInstance";
+﻿import axiosInstance from "./axiosInstance";
 
 export const getInvoices = async (page = 0, size = 10) => {
   const response = await axiosInstance.get("/invoices", {
@@ -31,13 +31,27 @@ export const getInvoiceAnalysis = async (id) => {
   return response.data;
 };
 
-export const getAnalysisHistory = async (id) => {
+export const searchInvoices = async (query = "", page = 0, size = 10) => {
+  const response = await axiosInstance.get("/invoices/search", {
+    params: { query, page, size },
+  });
+  return response.data;
+};
+
+export const getInvoiceAnalysisHistory = async (id) => {
   const response = await axiosInstance.get(`/invoices/${id}/analysis/history`);
   return response.data;
 };
 
 export const getSimilarInvoices = async (id) => {
   const response = await axiosInstance.get(`/invoices/${id}/similar`);
+  return response.data;
+};
+
+export const downloadInvoiceFile = async (id) => {
+  const response = await axiosInstance.get(`/invoices/${id}/file`, {
+    responseType: "blob",
+  });
   return response.data;
 };
 
