@@ -92,8 +92,6 @@ public class AnalysisService {
             );
 
             // Persist results
-            AnalysisResultResponse response = persistAnalysisResult(invoice, aiResponse, requestedBy);
-
             // Clean up temporary uploaded file binary from disk per lifecycle requirement
             cleanupTemporaryFile(invoice);
 

@@ -9,6 +9,7 @@ import com.doctrace.backend.repository.AnalysisResultRepository;
 import com.doctrace.backend.repository.FraudAlertRepository;
 import com.doctrace.backend.repository.InvoiceRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -33,6 +34,7 @@ public class DashboardService {
         this.entityMapper = entityMapper;
     }
 
+    @Transactional(readOnly = true)
     public DashboardSummaryResponse getSummary() {
         long totalInvoices = invoiceRepository.count();
         long pendingAnalysis = invoiceRepository.countByStatus(InvoiceStatus.ANALYZING) 
@@ -67,6 +69,7 @@ public class DashboardService {
         );
     }
 
+    @Transactional(readOnly = true)
     public List<AlertResponse> getRecentAlerts() {
         return fraudAlertRepository.findTop10ByOrderByCreatedAtDesc()
                 .stream()

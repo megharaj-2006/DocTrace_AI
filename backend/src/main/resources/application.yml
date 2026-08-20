@@ -64,7 +64,7 @@ doctrace:
     upload-dir: ${UPLOAD_DIR:storage/uploads}
 
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174}
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging:

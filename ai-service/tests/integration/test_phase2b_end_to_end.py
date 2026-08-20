@@ -55,14 +55,10 @@ def test_analyze_endpoint_end_to_end_pdf(client, sample_pdf_content):
 
 
 @pytest.mark.asyncio
-async def test_analyze_endpoint_with_matched_reference_document(client, sample_png_content):
+async def test_analyze_endpoint_with_matched_reference_document(client, mock_vector_store, sample_png_content):
     """Verify POST /api/v1/analyze returns matched candidate document details when reference is registered in store."""
-    from app.api.routes.analysis import get_analysis_service
-    from app.main import app
-
-    # Create isolated MockVectorStore & register reference document
-    mock_store = MockVectorStore()
-    vi_service = VectorIntelligenceService(vector_store=mock_store)
+    # Use the shared mock_vector_store fixture injected into the test client
+    vi_service = VectorIntelligenceService(vector_store=mock_vector_store)
 
     ref_img = Image.new("RGB", (300, 400), color=(100, 150, 200))
     await vi_service.register_page_embedding(

@@ -76,6 +76,85 @@ class VectorIntelligenceService:
         )
         return evidence
 
+    async def analyze_and_register_page(
+        self,
+        image_input: Union[Image.Image, str],
+        document_id: str,
+        page_number: int,
+        top_k: int = 5,
+        exclude_self: bool = True,
+    ) -> SimilarityEvidence:
+        """Combined search + registration workflow using a SINGLE DINOv2 inference per page.
+
+        Execution order (preserves self-exclusion correctness):
+          1. Generate 768-D L2-normalized embedding ONCE via DINOv2.
+          2. Search Qdrant nearest neighbors BEFORE upserting (so the current document
+             cannot match itself, even when exclude_self=True is not yet in the index).
+          3. Evaluate similarity evidence from search results.
+          4. Upsert the SAME embedding object into Qdrant (no second DINOv2 call).
+
+        Registration errors are logged but not re-raised — the analysis result is always
+        returned to the caller even if the Qdrant upsert fails (e.g., transient network error).
+        """
+        logger.info(
+            "Starting combined analyze+register for documentId='%s' page=%d (top_k=%d, exclude_self=%s)",
+            document_id,
+            page_number,
+            top_k,
+            exclude_self,
+        )
+
+        # 1. Generate 768-D L2-normalized embedding exactly ONCE
+        embedding: PageEmbedding = self.embedding_service.generate_page_embedding(
+            image_input=image_input,
+            document_id=document_id,
+            page_number=page_number,
+        )
+
+        # 2. Search nearest neighbors BEFORE registering this document
+        #    Self-exclusion via exclude_document_id filter on the Qdrant payload.
+        exclude_doc_id = document_id if exclude_self else None
+        raw_matches = await self.vector_store.search_nearest_pages(
+            query_vector=embedding.vector,
+            top_k=top_k,
+            exclude_document_id=exclude_doc_id,
+        )
+
+        # 3. Evaluate baseline similarity threshold evidence
+        evidence: SimilarityEvidence = self.similarity_service.evaluate_similarity(
+            query_document_id=document_id,
+            query_page_number=page_number,
+            raw_matches=raw_matches,
+        )
+
+        logger.info(
+            "Completed similarity search for documentId='%s' page=%d: %d matches found",
+            document_id,
+            page_number,
+            len(evidence.matches),
+        )
+
+        # 4. Register the SAME embedding into the corpus AFTER search
+        #    Uses the identical PageEmbedding object — no second DINOv2 inference.
+        try:
+            await self.vector_store.upsert_page_embedding(embedding)
+            logger.info(
+                "Registered page embedding into corpus for documentId='%s' page=%d",
+                document_id,
+                page_number,
+            )
+        except Exception as reg_err:
+            # Registration failure must NOT suppress the analysis result.
+            # Log and continue — the similarity evidence is already computed.
+            logger.error(
+                "Failed to register embedding for documentId='%s' page=%d: %s — analysis result preserved",
+                document_id,
+                page_number,
+                str(reg_err),
+            )
+
+        return evidence
+
     async def register_page_embedding(
         self,
         image_input: Union[Image.Image, str],
