@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${POSTGRES_DATA_DIR:-/opt/doctrace/postgres}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U doctrace -d doctrace_prod"]
       interval: 5s
@@ -25,7 +25,7 @@ services:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - qdrant_storage:/qdrant/storage
+      - ${QDRANT_STORAGE_DIR:-/opt/doctrace/qdrant}:/qdrant/storage
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
 
@@ -38,11 +38,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - APP_ENV=development
+      - APP_ENV=production
       - EMBEDDING_DEVICE=cpu
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION=invoice_page_embeddings_v1
+      - STRUCTURAL_COLLECTION=invoice_page_structural_embeddings_v1
       - VECTOR_STORE_BACKEND=qdrant
       - SIMILARITY_THRESHOLD=0.955
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
@@ -67,24 +68,14 @@ services:
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - AI_SERVICE_URL=http://ai-service:8000
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
-      - UPLOAD_DIR=storage/uploads
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+      - UPLOAD_DIR=/app/storage/uploads
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://100.54.131.80:3000,http://100.54.131.80:5173,http://localhost:8080}
+      - JAVA_TOOL_OPTIONS=-XX:+UseContainerSupport -Xms128m -Xmx512m -Xss512k
+    volumes:
+      - ${UPLOAD_DIR_MOUNT:-/opt/doctrace/uploads}:/app/storage/uploads
     depends_on:
       postgres:
         condition: service_healthy
       ai-service:
         condition: service_started
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: doctrace-frontend
-    restart: always
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-volumes:
-  qdrant_storage:
-  postgres_data:
