@@ -32,12 +32,14 @@ public class AdminController {
 
     @Operation(summary = "View system audit logs (ADMIN only)")
     @GetMapping("/audit-logs")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<Page<AuditLog>> getAuditLogs(@PageableDefault(size = 50) Pageable pageable) {
         return ResponseEntity.ok(auditLogService.findAll(pageable));
     }
     
     @Operation(summary = "Update a user's role (ADMIN only)")
     @PatchMapping("/users/{id}/role")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Void> updateUserRole(
             @PathVariable Long id,
             @RequestParam String role) {
@@ -47,12 +49,14 @@ public class AdminController {
 
     @Operation(summary = "List all users (ADMIN only)")
     @GetMapping("/users")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<Page<com.doctrace.backend.dto.response.UserResponse>> getUsers(@PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(userService.findAll(pageable).map(entityMapper::toUserResponse));
     }
     
     @Operation(summary = "Get system-wide statistics (ADMIN only)")
     @GetMapping("/statistics")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<com.doctrace.backend.dto.response.DashboardSummaryResponse> getStatistics() {
         return ResponseEntity.ok(dashboardService.getSummary());
     }

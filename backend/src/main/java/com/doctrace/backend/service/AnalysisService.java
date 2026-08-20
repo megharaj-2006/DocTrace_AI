@@ -213,6 +213,7 @@ public class AnalysisService {
         }
     }
 
+    @Transactional(readOnly = true)
     public AnalysisResultResponse getLatestAnalysis(Long invoiceId, User user) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
@@ -230,6 +231,7 @@ public class AnalysisService {
         return entityMapper.toAnalysisResultResponse(result);
     }
 
+    @Transactional(readOnly = true)
     public List<AnalysisResultResponse> getAnalysisHistory(Long invoiceId, User user) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));

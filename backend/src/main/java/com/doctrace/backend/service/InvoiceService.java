@@ -21,6 +21,7 @@ import java.util.UUID;
  * Invoice lifecycle management: upload, retrieval, search.
  */
 @Service
+@Transactional(readOnly = true)
 public class InvoiceService {
 
     private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);

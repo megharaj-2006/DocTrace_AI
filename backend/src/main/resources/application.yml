@@ -12,7 +12,7 @@ spring:
 
   # ── JPA / Hibernate ──────────────────────────────────────────────────────────
   jpa:
-    open-in-view: false
+    open-in-view: true
     hibernate:
       ddl-auto: validate
     properties:
@@ -55,8 +55,8 @@ doctrace:
 
   ai-service:
     url: ${AI_SERVICE_URL:http://localhost:8000}
-    connect-timeout-ms: 5000
-    read-timeout-ms: 60000
+    connect-timeout-ms: 10000
+    read-timeout-ms: 120000
     internal-api-key: ${INTERNAL_API_KEY:dev-internal-secret-key-12345}
 
 

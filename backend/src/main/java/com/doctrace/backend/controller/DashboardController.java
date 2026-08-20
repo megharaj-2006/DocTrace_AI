@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Dashboard", description = "System statistics and aggregates")
 @RestController
 @RequestMapping("/api/v1/dashboard")
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class DashboardController {
 
     private final DashboardService dashboardService;

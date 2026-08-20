@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Reports", description = "System reporting and analytics metrics")
 @RestController
 @RequestMapping("/api/v1/reports")
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class ReportController {
 
     private final ReportService reportService;
