@@ -20,26 +20,26 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        {/* <Route path="/" element={<ProtectedRoute />}> */}
-        <Route element={<MainLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="invoices" element={<InvoicesPage />} />
-          <Route path="invoices/upload" element={<UploadAnalyzePage />} />
-          <Route path="upload" element={<UploadAnalyzePage />} />
-          <Route path="similar" element={<SimilarDocumentsPage />} />
-          <Route path="similar-documents" element={<SimilarDocumentsPage />} />
-          <Route path="invoices/:id/similar" element={<SimilarDocumentsPage />} />
-          <Route path="invoices/:id" element={<InvoiceDetailPage />} />
-          <Route path="alerts" element={<AlertsPage />} />
-          <Route path="analysis" element={<AnalysisPage />} />
-          <Route path="providers" element={<ProvidersPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="audit-logs" element={<AuditLogsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+        <Route path="/" element={<ProtectedRoute />}>
+          <Route element={<MainLayout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="invoices/upload" element={<UploadAnalyzePage />} />
+            <Route path="upload" element={<UploadAnalyzePage />} />
+            <Route path="similar" element={<SimilarDocumentsPage />} />
+            <Route path="similar-documents" element={<SimilarDocumentsPage />} />
+            <Route path="invoices/:id/similar" element={<SimilarDocumentsPage />} />
+            <Route path="invoices/:id" element={<InvoiceDetailPage />} />
+            <Route path="alerts" element={<AlertsPage />} />
+            <Route path="analysis" element={<AnalysisPage />} />
+            <Route path="providers" element={<ProvidersPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="audit-logs" element={<AuditLogsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
         </Route>
-        {/* </Route> */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

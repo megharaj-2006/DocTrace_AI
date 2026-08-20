@@ -207,27 +207,36 @@ export default function Sidebar() {
 
       {/* Nav Items */}
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={({ isActive }) =>
-              `flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
-                isActive
-                  ? "bg-[#2563eb] text-white shadow-md font-semibold"
-                  : "text-slate-300/80 hover:bg-white/10 hover:text-white"
-              }`
+        {navItems
+          .filter((item) => {
+            const role = user?.role || (user?.roles && user?.roles[0]) || "USER";
+            const isAdm = role === "ADMIN" || role === "ROLE_ADMIN";
+            const isInv = role === "INVESTIGATOR" || role === "ROLE_INVESTIGATOR" || isAdm;
+
+            if (item.path === "/users" || item.path === "/audit-logs") {
+              return isAdm;
             }
-          >
-            <span className="flex-shrink-0">{item.icon}</span>
-            <span>{item.label}</span>
-            {item.badge && (
-              <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center shadow-xs">
-                {item.badge}
-              </span>
-            )}
-          </NavLink>
-        ))}
+            if (item.path === "/alerts" || item.path === "/providers" || item.path === "/reports") {
+              return isInv;
+            }
+            return true;
+          })
+          .map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
+                  isActive
+                    ? "bg-[#2563eb] text-white shadow-md font-semibold"
+                    : "text-slate-300/80 hover:bg-white/10 hover:text-white"
+                }`
+              }
+            >
+              <span className="flex-shrink-0">{item.icon}</span>
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
       </nav>
 
       {/* User Profile Section at Bottom */}

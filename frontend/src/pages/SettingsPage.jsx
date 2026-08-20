@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getCurrentUser, updateCurrentUser } from "../api/userApi";
+import { getCurrentUser, updateCurrentUser, changePassword } from "../api/userApi";
 
 const Toggle = ({ enabled, onChange }) => (
   <button
@@ -249,8 +249,34 @@ export default function SettingsPage() {
                         </div>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition">
-                      Update Password
+                    <button
+                      onClick={async () => {
+                        if (!passwords.current || !passwords.newPass) {
+                          setError("Please enter current and new password.");
+                          return;
+                        }
+                        if (passwords.newPass !== passwords.confirm) {
+                          setError("New passwords do not match.");
+                          return;
+                        }
+                        setSaving(true);
+                        setError("");
+                        setSuccess("");
+                        try {
+                          await changePassword(passwords.current, passwords.newPass);
+                          setSuccess("Password updated successfully!");
+                          setPasswords({ current: "", newPass: "", confirm: "" });
+                          setTimeout(() => setSuccess(""), 3000);
+                        } catch (err) {
+                          setError(err.response?.data?.message || "Failed to update password.");
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      disabled={saving}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:bg-blue-400 transition cursor-pointer"
+                    >
+                      {saving ? "Updating..." : "Update Password"}
                     </button>
                   </div>
                 </div>

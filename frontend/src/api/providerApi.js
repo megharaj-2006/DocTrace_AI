@@ -18,3 +18,13 @@ export const getProviderInvoices = async (id, page = 0, size = 10) => {
   });
   return response.data;
 };
+
+export const createProvider = async (data) => {
+  const response = await axiosInstance.post("/providers", data);
+  return response.data;
+};
+
+export const updateProvider = async (id, data) => {
+  const response = await axiosInstance.put(`/providers/${id}`, data);
+  return response.data;
+};

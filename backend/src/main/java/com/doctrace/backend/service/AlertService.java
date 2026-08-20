@@ -22,6 +22,7 @@ import java.util.List;
  * Manages the investigator workflow for fraud alerts.
  */
 @Service
+@Transactional(readOnly = true)
 public class AlertService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertService.class);

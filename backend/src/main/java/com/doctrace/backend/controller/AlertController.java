@@ -18,11 +18,13 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Alerts", description = "Fraud alert management and investigator workflow")
 @RestController
 @RequestMapping("/api/v1/alerts")
+@Transactional(readOnly = true)
 public class AlertController {
 
     private final AlertService alertService;

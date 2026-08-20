@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginApi } from "../api/authApi";
+import { loginApi, registerApi } from "../api/authApi";
 import useAuthStore from "../store/authStore";
 
 export default function LoginPage() {
@@ -12,6 +12,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Registration Modal State
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [regForm, setRegForm] = useState({ fullName: "", email: "", password: "", confirmPassword: "" });
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState("");
+  const [regSuccess, setRegSuccess] = useState("");
+
   // JWT Token Direct Login Modal State
   const [showJwtModal, setShowJwtModal] = useState(false);
   const [jwtTokenInput, setJwtTokenInput] = useState("");
@@ -19,6 +26,42 @@ export default function LoginPage() {
 
   // Forgot Password modal state
   const [showForgotModal, setShowForgotModal] = useState(false);
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!regForm.fullName || !regForm.email || !regForm.password) {
+      setRegError("All fields are required.");
+      return;
+    }
+    if (regForm.password.length < 6) {
+      setRegError("Password must be at least 6 characters.");
+      return;
+    }
+    if (regForm.password !== regForm.confirmPassword) {
+      setRegError("Passwords do not match.");
+      return;
+    }
+    setRegLoading(true);
+    setRegError("");
+    setRegSuccess("");
+    try {
+      await registerApi(regForm.email, regForm.password, regForm.fullName);
+      setRegSuccess("Account created successfully! Logging you in...");
+      // Automatically log in
+      const data = await loginApi(regForm.email, regForm.password);
+      const token = data.token || data.accessToken || data.jwt || data.data?.token;
+      const user = data.user || data.data?.user || { email: regForm.email, fullName: regForm.fullName };
+      setAuth(token, user);
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 800);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.error || "Registration failed. Email may already be registered.";
+      setRegError(msg);
+    } finally {
+      setRegLoading(false);
+    }
+  };
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -457,22 +500,143 @@ export default function LoginPage() {
           <div className="text-center mt-5 pt-2">
             <p className="text-xs text-slate-500 font-normal">
               Don't have an account?{" "}
-              <a
-                href="#register"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert("To create a new account, please contact your DocTrace AI system administrator.");
+              <button
+                type="button"
+                onClick={() => {
+                  setRegError("");
+                  setRegSuccess("");
+                  setShowRegisterModal(true);
                 }}
-                className="text-blue-600 font-medium hover:text-blue-700 hover:underline ml-0.5"
+                className="text-blue-600 font-medium hover:text-blue-700 hover:underline ml-0.5 cursor-pointer"
               >
                 Register here
-              </a>
+              </button>
             </p>
           </div>
 
         </div>
 
       </div>
+
+      {/* ================= USER REGISTRATION MODAL ================= */}
+      {showRegisterModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold text-slate-800">
+                  Create a DocTrace Account
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowRegisterModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              Register as a user to submit medical claim documents for AI template integrity and fraud analysis.
+            </p>
+
+            {regError && (
+              <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs">
+                {regError}
+              </div>
+            )}
+
+            {regSuccess && (
+              <div className="mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-xs">
+                {regSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleRegister} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={regForm.fullName}
+                  onChange={(e) => setRegForm({ ...regForm, fullName: e.target.value })}
+                  placeholder="Dr. Jane Doe"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Work Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={regForm.email}
+                  onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                  placeholder="jane.doe@hospital.org"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Password (min. 6 chars)
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={regForm.password}
+                  onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={regForm.confirmPassword}
+                  onChange={(e) => setRegForm({ ...regForm, confirmPassword: e.target.value })}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRegisterModal(false)}
+                  className="px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={regLoading}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                >
+                  {regLoading ? "Registering..." : "Create Account"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ================= JWT TOKEN LOGIN MODAL ================= */}
       {showJwtModal && (

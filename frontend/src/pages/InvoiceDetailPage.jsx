@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoiceById, getInvoiceAnalysis, getInvoiceAnalysisHistory, analyzeInvoice } from "../api/invoiceApi";
+import { getInvoiceById, getInvoiceAnalysis, getInvoiceAnalysisHistory, analyzeInvoice, downloadInvoiceFile } from "../api/invoiceApi";
 
 const RiskBadge = ({ risk }) => {
   if (!risk) return null;
@@ -124,13 +124,29 @@ export default function InvoiceDetailPage() {
           <h1 className="text-2xl font-bold text-gray-800">Invoice Detail</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+          <button
+            onClick={async () => {
+              try {
+                const blob = await downloadInvoiceFile(invoice.id);
+                const url = window.URL.createObjectURL(new Blob([blob]));
+                const link = document.createElement("a");
+                link.href = url;
+                link.setAttribute("download", invoice.originalFilename || `invoice_${invoice.documentId}.pdf`);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+              } catch (err) {
+                alert("Failed to download file. Please ensure document is stored.");
+              }
+            }}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+          >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Download Report
+            Download Document
           </button>
-          <button onClick={() => navigate("/invoices")} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+          <button onClick={() => navigate("/invoices")} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">
             ← Back
           </button>
         </div>

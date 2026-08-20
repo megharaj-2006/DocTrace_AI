@@ -37,4 +37,7 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
             WHERE ar.id = :id
             """)
     Optional<AnalysisResult> findByIdWithSimilarDocuments(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"similarDocuments"})
+    org.springframework.data.domain.Page<AnalysisResult> findAll(org.springframework.data.domain.Pageable pageable);
 }

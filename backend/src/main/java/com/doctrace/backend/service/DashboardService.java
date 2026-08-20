@@ -83,4 +83,39 @@ public class DashboardService {
         long low = analysisResultRepository.countLowRisk();
         return new com.doctrace.backend.dto.response.SimilarityStatisticsResponse(high, medium, low);
     }
+
+    @Transactional(readOnly = true)
+    public List<com.doctrace.backend.dto.response.DashboardTrendItem> getTrends() {
+        java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("dd MMM")
+                .withZone(java.time.ZoneId.of("UTC"));
+
+        java.util.Map<String, long[]> countsByDate = new java.util.LinkedHashMap<>();
+        
+        // Populate last 7 days keys with default 0s
+        java.time.Instant now = java.time.Instant.now();
+        for (int i = 6; i >= 0; i--) {
+            java.time.Instant day = now.minus(i, java.time.temporal.ChronoUnit.DAYS);
+            countsByDate.put(formatter.format(day), new long[]{0, 0, 0});
+        }
+
+        List<com.doctrace.backend.entity.AnalysisResult> results = analysisResultRepository.findAll();
+        for (com.doctrace.backend.entity.AnalysisResult r : results) {
+            if (r.getCreatedAt() != null) {
+                String dateKey = formatter.format(r.getCreatedAt());
+                long[] bucket = countsByDate.computeIfAbsent(dateKey, k -> new long[]{0, 0, 0});
+                if (r.getRiskLevel() == com.doctrace.backend.entity.RiskLevel.RED) {
+                    bucket[0]++;
+                } else if (r.getRiskLevel() == com.doctrace.backend.entity.RiskLevel.AMBER) {
+                    bucket[1]++;
+                } else {
+                    bucket[2]++;
+                }
+            }
+        }
+
+        return countsByDate.entrySet().stream()
+                .map(e -> new com.doctrace.backend.dto.response.DashboardTrendItem(
+                        e.getKey(), e.getValue()[0], e.getValue()[1], e.getValue()[2]))
+                .toList();
+    }
 }

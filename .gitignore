@@ -115,3 +115,7 @@ temp/
 *.sqlite3
 *.db
 dataset/raw/original/fatura_dataset/images/
+update.tar.gz
+test_artifacts/
+test_e2e_ec2.py
+

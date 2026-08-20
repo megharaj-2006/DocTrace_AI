@@ -14,3 +14,8 @@ export const getSimilarityStatistics = async () => {
   const response = await axiosInstance.get("/dashboard/similarity-statistics");
   return response.data;
 };
+
+export const getDashboardTrends = async () => {
+  const response = await axiosInstance.get("/dashboard/trends");
+  return response.data;
+};

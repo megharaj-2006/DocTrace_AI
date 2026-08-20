@@ -37,4 +37,10 @@ public class DashboardController {
     public ResponseEntity<com.doctrace.backend.dto.response.SimilarityStatisticsResponse> getSimilarityStatistics() {
         return ResponseEntity.ok(dashboardService.getSimilarityStatistics());
     }
+
+    @Operation(summary = "Get alerts and analysis trends over time")
+    @GetMapping("/trends")
+    public ResponseEntity<java.util.List<com.doctrace.backend.dto.response.DashboardTrendItem>> getTrends() {
+        return ResponseEntity.ok(dashboardService.getTrends());
+    }
 }

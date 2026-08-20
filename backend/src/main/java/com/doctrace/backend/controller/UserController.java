@@ -44,6 +44,15 @@ public class UserController {
         return ResponseEntity.ok(entityMapper.toUserResponse(user));
     }
 
+    @Operation(summary = "Change current user password")
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @jakarta.validation.Valid @RequestBody com.doctrace.backend.dto.request.ChangePasswordRequest request) {
+        userService.changePassword(userDetails.getUsername(), request.currentPassword(), request.newPassword());
+        return ResponseEntity.ok().build();
+    }
+
     @Operation(summary = "Get a user by ID")
     @GetMapping("/{id}")
     public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
