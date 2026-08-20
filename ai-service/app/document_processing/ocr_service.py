@@ -110,9 +110,26 @@ class OCRService:
                     if result is None:
                         continue
 
+                    if isinstance(result, list):
+                        for item in result:
+                            if isinstance(item, (list, tuple)) and len(item) == 2:
+                                poly, text_score = item
+                                if isinstance(text_score, (list, tuple)) and len(text_score) == 2:
+                                    txt, score = text_score
+                                    ocr_regions.append(
+                                        OCRRegion(
+                                            text=str(txt).strip(),
+                                            bbox=poly if isinstance(poly, list) else [],
+                                            confidence=round(float(score), 4),
+                                        )
+                                    )
+                        continue
+
                     data = getattr(result, "json", None)
                     if callable(data):
                         data = data()
+                    elif data is None and isinstance(result, dict):
+                        data = result
 
                     if not data:
                         continue
