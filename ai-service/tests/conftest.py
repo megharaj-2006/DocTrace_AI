@@ -60,8 +60,17 @@ def sample_pdf_content():
 
 @pytest.fixture
 def sample_png_content():
-    """Valid PNG image content fixture."""
-    img = Image.new("RGB", (400, 500), color="white")
+    """Valid PNG image content fixture with medical invoice layout."""
+    from PIL import ImageDraw
+    img = Image.new("RGB", (600, 800), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.text((50, 40), "City Care Hospital - Tax Invoice", fill="black")
+    draw.text((50, 100), "Patient Name: Ramesh Kumar", fill="black")
+    draw.text((50, 130), "Invoice No: INV-2026-001", fill="black")
+    draw.text((50, 160), "Date: 19-08-2026", fill="black")
+    draw.text((50, 250), "Room Charges: INR 15,000", fill="black")
+    draw.text((50, 300), "Medicine Charges: INR 20,000", fill="black")
+    draw.text((50, 600), "Total Amount: INR 35,000", fill="black")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -72,3 +81,4 @@ def temp_dir():
     """Isolated temporary directory fixture."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
+

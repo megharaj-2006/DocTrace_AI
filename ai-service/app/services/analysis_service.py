@@ -1,17 +1,23 @@
 import asyncio
-import inspect
 import os
 import shutil
 import tempfile
-from typing import Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional
 from fastapi import UploadFile
 
 from app.core.config import settings
 from app.core.exceptions import InvalidInputException, ProcessingException
 from app.core.logging import logger
+from app.document_processing.document_classifier import DocumentClassifier
 from app.document_processing.processor import DocumentProcessor
 from app.schemas.analysis import AnalysisResponse, MatchedDocument
-from app.schemas.similarity import SimilarityEvidence
+from app.schemas.document_understanding import DocumentClassification, DocumentType, RelevanceStatus
+from app.schemas.report import AnalysisReport
+from app.schemas.similarity import PageSimilarityMatch
+from app.services.fingerprint_service import FingerprintService, StructuralFingerprintService
+from app.services.risk_signal_service import RiskSignalService
+from app.services.template_extraction_service import TemplateExtractionService
 from app.services.vector_intelligence_service import VectorIntelligenceService
 from app.vector_store.base import VectorStore
 from app.vector_store.mock import MockVectorStore
@@ -19,19 +25,25 @@ from app.vector_store.qdrant import QdrantVectorStore
 
 
 class AnalysisService:
-    """Orchestrates document validation, temporary file lifecycle, Phase 1 intelligence, and Phase 2A vector search."""
+    """Orchestrates complete multi-signal document analysis pipeline and relevance gating."""
 
     def __init__(
         self,
         vector_store: Optional[VectorStore] = None,
         document_processor: Optional[DocumentProcessor] = None,
         vector_intelligence_service: Optional[VectorIntelligenceService] = None,
+        document_classifier: Optional[DocumentClassifier] = None,
+        template_extraction_service: Optional[TemplateExtractionService] = None,
+        risk_signal_service: Optional[RiskSignalService] = None,
     ):
         self.vector_store = vector_store or self._create_vector_store()
         self.document_processor = document_processor or DocumentProcessor()
         self.vector_intelligence_service = vector_intelligence_service or VectorIntelligenceService(
             vector_store=self.vector_store
         )
+        self.document_classifier = document_classifier or DocumentClassifier()
+        self.template_extraction_service = template_extraction_service or TemplateExtractionService()
+        self.risk_signal_service = risk_signal_service or RiskSignalService()
 
     @staticmethod
     def _create_vector_store() -> VectorStore:
@@ -41,14 +53,13 @@ class AnalysisService:
         return MockVectorStore()
 
     def validate_input(self, file: UploadFile, document_id: str) -> None:
-        """Validate basic request inputs for Phase 1 and Phase 2B."""
+        """Validate basic request inputs."""
         if not document_id or not document_id.strip():
             raise InvalidInputException("documentId parameter is required and cannot be empty.")
 
         if not file or not file.filename:
             raise InvalidInputException("Uploaded file is missing or filename is empty.")
 
-        # Check if file has size (if available) or read head
         file.file.seek(0, os.SEEK_END)
         file_size = file.file.tell()
         file.file.seek(0)
@@ -57,16 +68,26 @@ class AnalysisService:
             raise InvalidInputException("Uploaded file is empty (0 bytes).")
 
     async def analyze_document(self, file: UploadFile, document_id: str) -> AnalysisResponse:
-        """Process document file through Phase 1 DocumentProcessor and Phase 2A Vector Intelligence.
+        """Execute complete end-to-end multi-signal AI analysis pipeline.
 
-        Returns structured response conforming strictly to frozen AnalysisResponse API contract.
-        Guarantees main temporary file deletion upon completion or failure.
+        Pipeline Stages:
+          1. File validation & temporary isolation
+          2. Document Understanding (OCR + PP-DocLayout-M Layout Detection)
+          3. Relevance Gate & Document Classification
+             - IF IRRELEVANT: Reject immediately. No DINOv2 inference, no Qdrant search/write.
+          4. Template Extraction & Standardization (Normalized Geometry + Variable Fields)
+          5. Multi-Signal Fingerprinting (DINOv2 768-D + Structural 128-D) exactly ONCE per page
+          6. Qdrant Cross-Document Template Search with Self-Match Exclusion
+          7. Multi-Signal Suspicion Engine (Legitimate Same-Provider Reuse vs Suspicious Cross-Provider)
+          8. Trusted Corpus Registration (only for relevant documents)
+          9. AnalysisReport generation and conversion to frozen AnalysisResponse
         """
         self.validate_input(file, document_id)
+        start_time = time.time()
 
         temp_dir = settings.TEMP_DIR or None
         temp_file_path: Optional[str] = None
-        evidences: List[SimilarityEvidence] = []
+        created_page_files: List[str] = []
 
         try:
             # 1. Save uploaded file to an isolated temporary file
@@ -75,117 +96,149 @@ class AnalysisService:
                 temp_file_path = tmp.name
                 shutil.copyfileobj(file.file, tmp)
 
-            logger.info(
-                "Created temporary processing file '%s' for documentId='%s'",
-                temp_file_path,
-                document_id,
+            logger.info("Saved temporary upload file '%s' for documentId='%s'", temp_file_path, document_id)
+
+            # Validate file format and size
+            self.document_processor.file_validator.validate_file(temp_file_path)
+
+            # 2. Stage 1: Document Understanding (Render pages, Preprocess, Layout, OCR)
+            # Load pages explicitly to retain image paths for multi-signal fingerprinting
+            page_entries, created_page_files = await asyncio.to_thread(
+                self.document_processor.document_loader.load_document_pages, temp_file_path
             )
 
-            # Capture main event loop for threadsafe coroutine scheduling from worker thread
-            main_loop = asyncio.get_running_loop()
+            # Process layout and OCR across all pages in worker thread
+            def run_page_understanding():
+                pages_data = []
+                for page_num, temp_img_path in page_entries:
+                    img_np, (orig_w, orig_h) = self.document_processor.preprocessor.preprocess_image(temp_img_path)
+                    layout_regions = self.document_processor.layout_detector.detect_layout(img_np)
+                    ocr_regions = self.document_processor.ocr_service.extract_ocr(img_np)
+                    page_text = " ".join(reg.text for reg in ocr_regions if reg.text)
 
-            # Define page callback for inline Phase 2A vector similarity analysis
-            def page_callback(page_num: int, temp_img_path: str):
-                logger.debug(
-                    "Executing Phase 2A page analyze+register for docId='%s' page=%d",
-                    document_id,
-                    page_num,
+                    from app.schemas.processed_document import PageData
+                    pages_data.append(
+                        PageData(
+                            page_number=page_num,
+                            width=orig_w,
+                            height=orig_h,
+                            text=page_text,
+                            ocr_regions=ocr_regions,
+                            layout_regions=layout_regions,
+                        )
+                    )
+                from app.schemas.processed_document import ProcessedDocument
+                return ProcessedDocument(
+                    document_id=document_id,
+                    pages=pages_data,
+                    metadata={"total_pages": len(pages_data)},
                 )
-                try:
-                    future = asyncio.run_coroutine_threadsafe(
-                        self.vector_intelligence_service.analyze_and_register_page(
-                            image_input=temp_img_path,
-                            document_id=document_id,
-                            page_number=page_num,
-                            top_k=5,
-                            exclude_self=True,
-                        ),
-                        main_loop,
-                    )
-                    evidence = future.result(timeout=60)
-                    evidences.append(evidence)
 
-                    # Register only after the search so a document cannot match itself.
-                    registration = asyncio.run_coroutine_threadsafe(
-                        self.vector_intelligence_service.register_page_embedding(
-                            image_input=temp_img_path,
-                            document_id=document_id,
-                            page_number=page_num,
-                        ),
-                        main_loop,
-                    )
-                    registration.result(timeout=60)
-                except Exception as err:
-                    logger.error(
-                        "Error running Phase 2A analyze+register for docId='%s' page=%d: %s",
-                        document_id,
-                        page_num,
-                        str(err),
-                        exc_info=True,
-                    )
-                    raise
-
-            # 2. Phase 1 Document Intelligence Execution + Inline Phase 2A Vector Search in worker thread
-            processed_doc = await asyncio.to_thread(
-                self.document_processor.process,
-                temp_file_path,
-                document_id,
-                page_callback,
-            )
-
+            processed_doc = await asyncio.to_thread(run_page_understanding)
             logger.info(
-
-                "Completed document processing and vector search for documentId='%s' (%d pages)",
+                "Document understanding completed for documentId='%s' (%d pages)",
                 document_id,
                 len(processed_doc.pages),
             )
 
-            # 3. Map accumulated page-level SimilarityEvidence to frozen AnalysisResponse API contract
-            matched_dict: Dict[str, float] = {}
-
-            for ev in evidences:
-                for match in ev.matches:
-                    if match.document_id not in matched_dict or match.similarity_score > matched_dict[match.document_id]:
-                        matched_dict[match.document_id] = match.similarity_score
-
-            matched_documents: List[MatchedDocument] = [
-                MatchedDocument(documentId=doc_id, similarity=score)
-                for doc_id, score in matched_dict.items()
-            ]
-            matched_documents.sort(key=lambda x: x.similarity, reverse=True)
-
-            if matched_documents:
-                top_similarity = matched_documents[0].similarity
-                fraud_score = round(top_similarity, 4)
-                if top_similarity >= settings.SIMILARITY_THRESHOLD:
-                    risk_level = "RED"
-                elif top_similarity >= 0.90:
-                    risk_level = "AMBER"
-                else:
-                    risk_level = "LOW"
-
-                confidence = round(min(0.99, max(0.85, top_similarity)), 2)
-                reasons = [
-                    f"Detected template similarity with document '{m.documentId}' (similarity: {m.similarity:.4f})"
-                    for m in matched_documents
-                ]
-            else:
-                fraud_score = 0.0
-                risk_level = "LOW"
-                confidence = 0.95
-                reasons = ["No suspicious template similarity detected against existing document corpus."]
-
-            response = AnalysisResponse(
-                documentId=document_id,
-                fraudScore=fraud_score,
-                riskLevel=risk_level,
-                confidence=confidence,
-                matchedDocuments=matched_documents,
-                reasons=reasons,
+            # 3. Stage 2: Relevance Gate & Document Classification (POST OCR/Layout)
+            classification: DocumentClassification = self.document_classifier.classify_and_gate(processed_doc)
+            logger.info(
+                "Relevance gate evaluation for documentId='%s': status=%s, type=%s, conf=%.2f",
+                document_id,
+                classification.relevance_status.value,
+                classification.document_type.value,
+                classification.confidence,
             )
 
-            logger.info("Analysis completed successfully for documentId='%s'", document_id)
-            return response
+            # --- IRRELEVANT DOCUMENT HANDLING ---
+            if classification.relevance_status == RelevanceStatus.IRRELEVANT:
+                logger.warning(
+                    "Document '%s' REJECTED by Relevance Gate as IRRELEVANT (type=%s). "
+                    "Skipping DINOv2 inference, structural fingerprinting, and vector store registration.",
+                    document_id,
+                    classification.document_type.value,
+                )
+                reasons = [
+                    "Document rejected: uploaded content is not a relevant medical document.",
+                    "Document excluded from template similarity analysis because it was classified as non-medical / irrelevant.",
+                    *classification.reasons,
+                ]
+                return AnalysisResponse(
+                    documentId=document_id,
+                    fraudScore=0.0,
+                    riskLevel="LOW",
+                    confidence=0.0,
+                    matchedDocuments=[],
+                    reasons=reasons,
+                )
+
+            # 4. Stage 3: Template Extraction & Standardization
+            templates = self.template_extraction_service.extract_document_templates(
+                processed_doc=processed_doc,
+                classification=classification,
+            )
+
+            # 5. Stage 4: Multi-Signal Search & Trusted Corpus Registration
+            provider_name = classification.provider_info.name if classification.provider_info else None
+            doc_type_val = classification.document_type.value
+            all_visual_matches: List[PageSimilarityMatch] = []
+            all_structural_matches: List[PageSimilarityMatch] = []
+
+            for (page_num, temp_img_path), page_template in zip(page_entries, templates):
+                logger.debug(
+                    "Executing multi-signal analyze & register for docId='%s' page=%d (docType=%s)",
+                    document_id,
+                    page_num,
+                    doc_type_val,
+                )
+                v_matches, s_matches, _, _ = await self.vector_intelligence_service.search_and_register_multisignal_page(
+                    image_input=temp_img_path,
+                    template=page_template,
+                    document_id=document_id,
+                    page_number=page_num,
+                    document_type=doc_type_val,
+                    provider_name=provider_name,
+                    top_k=settings.TOP_K_MATCHES,
+                    exclude_self=True,
+                )
+                all_visual_matches.extend(v_matches)
+                all_structural_matches.extend(s_matches)
+
+            # 6. Stage 5: Multi-Signal Match Combination & Provider Context Evaluation
+            matched_candidates = self.risk_signal_service.combine_matches(
+                visual_matches=all_visual_matches,
+                structural_matches=all_structural_matches,
+                query_doc_id=document_id,
+                query_provider=classification.provider_info,
+            )
+
+            elapsed_ms = round((time.time() - start_time) * 1000, 2)
+            processing_metadata = {
+                "elapsed_ms": elapsed_ms,
+                "pages_count": len(processed_doc.pages),
+                "classification": classification.model_dump(),
+            }
+
+            # 7. Stage 6: Risk Signal & Suspicion Scoring
+            report: AnalysisReport = self.risk_signal_service.evaluate_risk(
+                document_id=document_id,
+                classification=classification,
+                templates=templates,
+                matched_candidates=matched_candidates,
+                processing_metadata=processing_metadata,
+            )
+
+            logger.info(
+                "Analysis complete for documentId='%s': riskLevel=%s, fraudScore=%.4f, matchedDocs=%d",
+                document_id,
+                report.risk_level,
+                report.fraud_score,
+                len(report.matched_candidates),
+            )
+
+            # 8. Convert internal rich AnalysisReport to frozen external AnalysisResponse
+            return report.to_analysis_response()
 
         except InvalidInputException:
             raise
@@ -193,11 +246,14 @@ class AnalysisService:
             logger.error("Error processing documentId='%s': %s", document_id, str(err), exc_info=True)
             raise ProcessingException(f"Failed to process document: {str(err)}") from err
         finally:
-            # 4. Guaranteed Main Temporary File Cleanup
+            # 9. Guaranteed Intermediate File Cleanup
+            if created_page_files:
+                self.document_processor.document_loader.cleanup_temp_files(created_page_files)
             if temp_file_path and os.path.exists(temp_file_path):
                 try:
                     os.remove(temp_file_path)
                     logger.info("Successfully deleted temporary file '%s'", temp_file_path)
                 except Exception as cleanup_err:
                     logger.error("Failed to clean up temporary file '%s': %s", temp_file_path, str(cleanup_err))
+
 

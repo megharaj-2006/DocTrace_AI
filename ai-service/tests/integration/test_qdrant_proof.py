@@ -310,6 +310,67 @@ async def test_corpus_accumulates_across_multiple_documents():
     )
 
 
+@pytest.mark.asyncio
+async def test_embedded_qdrant_engine_multi_vector_and_doc_type_filter():
+    """
+    PROOF: Real Qdrant vector engine executes multi-vector collections (768-D visual + 128-D structural),
+    exact cosine distance math, self-exclusion, and document_type payload filtering.
+    """
+    from qdrant_client import QdrantClient
+    from app.vector_store.qdrant import QdrantVectorStore
+    from app.schemas.structural import StructuralEmbedding
+
+    # Initialize real in-memory Qdrant engine
+    mem_client = QdrantClient(":memory:")
+    qs = QdrantVectorStore(client=mem_client)
+
+    # 1. Ensure collections created
+    await qs.ensure_collection()
+    await qs.ensure_structural_collection()
+
+    # 2. Register Invoice A
+    vec_inv_768 = make_normalized_vector(seed=101, dim=768)
+    vec_inv_128 = make_normalized_vector(seed=101, dim=128)
+    emb_inv = PageEmbedding(document_id="QDRANT-INV-A", page_number=1, vector=vec_inv_768, raw_vector=vec_inv_768)
+    struct_inv = StructuralEmbedding(document_id="QDRANT-INV-A", page_number=1, vector=vec_inv_128)
+
+    await qs.upsert_page_embedding(emb_inv, payload_extra={"document_type": "INVOICE", "provider_name": "Apollo"})
+    await qs.upsert_structural_embedding(struct_inv, payload_extra={"document_type": "INVOICE", "provider_name": "Apollo"})
+
+    # 3. Register Prescription B with identical visual embedding (simulating coincident visual background)
+    emb_rx = PageEmbedding(document_id="QDRANT-RX-B", page_number=1, vector=vec_inv_768, raw_vector=vec_inv_768)
+    struct_rx = StructuralEmbedding(document_id="QDRANT-RX-B", page_number=1, vector=vec_inv_128)
+
+    await qs.upsert_page_embedding(emb_rx, payload_extra={"document_type": "PRESCRIPTION", "provider_name": "Apollo"})
+    await qs.upsert_structural_embedding(struct_rx, payload_extra={"document_type": "PRESCRIPTION", "provider_name": "Apollo"})
+
+    # 4. Search Invoice corpus with Invoice query vector:
+    # Query must find Invoice A, but MUST filter out Prescription B despite identical vector!
+    inv_results = await qs.search_nearest_pages(
+        query_vector=vec_inv_768,
+        top_k=5,
+        exclude_document_id="QDRANT-INV-NEW",
+        document_type="INVOICE",
+    )
+
+    assert len(inv_results) == 1, f"Expected exactly 1 invoice match, got {len(inv_results)}"
+    assert inv_results[0].document_id == "QDRANT-INV-A"
+    assert inv_results[0].similarity_score > 0.99
+    assert not any(r.document_id == "QDRANT-RX-B" for r in inv_results)
+
+    # 5. Search Prescription corpus:
+    rx_results = await qs.search_nearest_pages(
+        query_vector=vec_inv_768,
+        top_k=5,
+        exclude_document_id="QDRANT-RX-NEW",
+        document_type="PRESCRIPTION",
+    )
+
+    assert len(rx_results) == 1
+    assert rx_results[0].document_id == "QDRANT-RX-B"
+    assert not any(r.document_id == "QDRANT-INV-A" for r in rx_results)
+
+
 # ---------------------------------------------------------------------------
 # TEST 6: Qdrant live connectivity and collection health (requires live Qdrant)
 # ---------------------------------------------------------------------------
@@ -377,3 +438,4 @@ async def test_qdrant_connectivity_and_collection():
         f"\n[PROOF] Live Qdrant: upserted 2 vectors, searched, "
         f"found match with similarity={results[0].similarity_score:.6f}"
     )
+

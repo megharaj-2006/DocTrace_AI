@@ -17,20 +17,41 @@ class MockVectorStore(VectorStore):
         self.collection_name = collection_name or settings.QDRANT_COLLECTION
         # Keys are "document_id:page_number"
         self._page_store: Dict[str, PageEmbedding] = {}
+        self._structural_store: Dict[str, Any] = {}
         self._legacy_store: Dict[str, Dict[str, Any]] = {}
         self._collection_initialized: bool = False
+        self._structural_collection_initialized: bool = False
 
     async def ensure_collection(self) -> bool:
-        """Ensure mock collection is initialized."""
+        """Ensure mock visual collection is initialized."""
         self._collection_initialized = True
         logger.debug("MockVectorStore: Collection '%s' initialized", self.collection_name)
         return True
 
-    async def upsert_page_embedding(self, embedding: PageEmbedding) -> bool:
+    async def ensure_structural_collection(self) -> bool:
+        """Ensure mock structural collection is initialized."""
+        self._structural_collection_initialized = True
+        logger.debug("MockVectorStore: Structural collection '%s' initialized", settings.STRUCTURAL_COLLECTION)
+        return True
+
+    async def upsert_page_embedding(self, embedding: PageEmbedding, payload_extra: Optional[Dict[str, Any]] = None) -> bool:
         """Upsert a page embedding into in-memory store."""
         key = f"{embedding.document_id}:{embedding.page_number}"
-        self._page_store[key] = embedding
+        self._page_store[key] = {
+            "embedding": embedding,
+            "payload_extra": payload_extra or {},
+        }
         logger.debug("MockVectorStore: Upserted page embedding key='%s'", key)
+        return True
+
+    async def upsert_structural_embedding(self, embedding: Any, payload_extra: Optional[Dict[str, Any]] = None) -> bool:
+        """Upsert a structural embedding into in-memory store."""
+        key = f"{embedding.document_id}:{embedding.page_number}"
+        self._structural_store[key] = {
+            "embedding": embedding,
+            "payload_extra": payload_extra or {},
+        }
+        logger.debug("MockVectorStore: Upserted structural embedding key='%s'", key)
         return True
 
     async def search_nearest_pages(
@@ -39,26 +60,44 @@ class MockVectorStore(VectorStore):
         top_k: int = 5,
         exclude_document_id: Optional[str] = None,
         min_similarity: Optional[float] = None,
+        document_type: Optional[str] = None,
     ) -> List[PageSimilarityMatch]:
-        """Search nearest page embeddings in memory, filtering out exclude_document_id."""
+        """Search nearest page embeddings in memory, filtering out exclude_document_id and matching document_type."""
         threshold = min_similarity if min_similarity is not None else settings.SIMILARITY_THRESHOLD
         q_vec = np.array(query_vector, dtype=np.float32)
 
         candidates = []
-        for key, emb in self._page_store.items():
+        for key, item in self._page_store.items():
+            if isinstance(item, dict):
+                emb = item["embedding"]
+                extra = item["payload_extra"]
+            else:
+                emb = item
+                extra = {}
+
             if exclude_document_id and emb.document_id == exclude_document_id:
                 continue  # Self-match prevention
 
-            stored_vec = np.array(emb.vector, dtype=np.float32)
-            # Dot product of normalized vectors = Cosine similarity
-            score = float(np.dot(q_vec, stored_vec))
-            candidates.append((score, emb))
+            # Document-type partition filter
+            if document_type:
+                cand_doc_type = extra.get("document_type") or extra.get("doc_type")
+                if cand_doc_type and cand_doc_type.upper() != document_type.upper():
+                    continue
 
-        # Sort descending by similarity score
+            stored_vec = np.array(emb.vector, dtype=np.float32)
+            score = float(np.dot(q_vec, stored_vec))
+            candidates.append((score, emb, extra))
+
         candidates.sort(key=lambda x: x[0], reverse=True)
 
         results = []
-        for score, emb in candidates[:top_k]:
+        for score, emb, extra in candidates[:top_k]:
+            meta = {
+                "model_name": emb.model_name,
+                "model_version": emb.model_version,
+                "created_at": emb.created_at,
+            }
+            meta.update(extra)
             results.append(
                 PageSimilarityMatch(
                     document_id=emb.document_id,
@@ -66,21 +105,75 @@ class MockVectorStore(VectorStore):
                     similarity_score=round(score, 6),
                     threshold=threshold,
                     above_threshold=(score >= threshold),
-                    metadata={
-                        "model_name": emb.model_name,
-                        "model_version": emb.model_version,
-                        "created_at": emb.created_at,
-                    },
+                    metadata=meta,
+                )
+            )
+        return results
+
+    async def search_nearest_structural(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        exclude_document_id: Optional[str] = None,
+        min_similarity: Optional[float] = None,
+        document_type: Optional[str] = None,
+    ) -> List[PageSimilarityMatch]:
+        """Search nearest structural layout embeddings in memory, filtering out exclude_document_id and matching document_type."""
+        threshold = min_similarity if min_similarity is not None else settings.STRUCTURAL_SIMILARITY_THRESHOLD
+        q_vec = np.array(query_vector, dtype=np.float32)
+
+        candidates = []
+        for key, item in self._structural_store.items():
+            emb = item["embedding"]
+            extra = item["payload_extra"]
+
+            if exclude_document_id and emb.document_id == exclude_document_id:
+                continue  # Self-match prevention
+
+            # Document-type partition filter
+            if document_type:
+                cand_doc_type = extra.get("document_type") or extra.get("doc_type")
+                if cand_doc_type and cand_doc_type.upper() != document_type.upper():
+                    continue
+
+            stored_vec = np.array(emb.vector, dtype=np.float32)
+            score = float(np.dot(q_vec, stored_vec))
+            candidates.append((score, emb, extra))
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+
+        results = []
+        for score, emb, extra in candidates[:top_k]:
+            meta = {
+                "model_version": emb.model_version,
+                "template_version": emb.template_version,
+                "created_at": emb.created_at,
+            }
+            meta.update(extra)
+            results.append(
+                PageSimilarityMatch(
+                    document_id=emb.document_id,
+                    page_number=emb.page_number,
+                    similarity_score=round(score, 6),
+                    threshold=threshold,
+                    above_threshold=(score >= threshold),
+                    metadata=meta,
                 )
             )
         return results
 
     async def delete_document_embeddings(self, document_id: str) -> bool:
         """Delete all page embeddings for a given document_id."""
-        keys_to_delete = [k for k, v in self._page_store.items() if v.document_id == document_id]
+        keys_to_delete = [
+            k for k, v in self._page_store.items()
+            if (v["embedding"].document_id if isinstance(v, dict) else v.document_id) == document_id
+        ]
         for k in keys_to_delete:
             del self._page_store[k]
-        return len(keys_to_delete) > 0
+        struct_keys = [k for k, v in self._structural_store.items() if v["embedding"].document_id == document_id]
+        for k in struct_keys:
+            del self._structural_store[k]
+        return len(keys_to_delete) > 0 or len(struct_keys) > 0
 
     async def add_vector(
         self,
@@ -121,4 +214,5 @@ class MockVectorStore(VectorStore):
     async def is_healthy(self) -> bool:
         """Mock vector store is always healthy."""
         return True
+
 

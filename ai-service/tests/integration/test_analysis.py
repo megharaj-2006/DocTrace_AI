@@ -96,16 +96,28 @@ def test_analyze_auth_production_default_key_rejected(client, sample_pdf_content
 
 def test_analyze_qdrant_failure_sanitized_500(client, sample_pdf_content):
     """TASK 3: Verify Qdrant connection failure returns HTTP 500 without stack trace leak."""
-    from unittest.mock import patch
+    from unittest.mock import patch, MagicMock
     from app.core.exceptions import ProcessingException
+    from app.schemas.document_understanding import DocumentClassification, DocumentType, RelevanceStatus
 
-    with patch("app.vector_store.mock.MockVectorStore.search_nearest_pages", side_effect=ProcessingException("Qdrant connection refused")):
-        files = {"file": ("test.pdf", io.BytesIO(sample_pdf_content), "application/pdf")}
-        data = {"documentId": "INV-QDRANT-FAIL-001"}
-        headers = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
+    rel_mock = MagicMock(
+        return_value=DocumentClassification(
+            relevance_status=RelevanceStatus.RELEVANT,
+            document_type=DocumentType.INVOICE,
+            confidence=0.95,
+            keywords_detected=["invoice", "total"],
+            reasons=["Valid test medical invoice"],
+        )
+    )
 
-        response = client.post("/api/v1/analyze", files=files, data=data, headers=headers)
-        assert response.status_code == 500
-        data_json = response.json()
-        assert "detail" in data_json
-        assert "Traceback" not in data_json["detail"]
+    with patch("app.document_processing.document_classifier.DocumentClassifier.classify_and_gate", rel_mock):
+        with patch("app.vector_store.mock.MockVectorStore.search_nearest_pages", side_effect=ProcessingException("Qdrant connection refused")):
+            files = {"file": ("test.pdf", io.BytesIO(sample_pdf_content), "application/pdf")}
+            data = {"documentId": "INV-QDRANT-FAIL-001"}
+            headers = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
+
+            response = client.post("/api/v1/analyze", files=files, data=data, headers=headers)
+            assert response.status_code == 500
+            data_json = response.json()
+            assert "detail" in data_json
+            assert "Traceback" not in data_json["detail"]

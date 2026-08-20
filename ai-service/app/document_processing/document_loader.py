@@ -79,10 +79,14 @@ class DocumentLoader:
                             image.save(page_img_path, format="PNG")
                             created_temp_files.append(page_img_path)
                             page_entries.append((page_num, page_img_path))
-                except InvalidInputException:
+                except (InvalidInputException, ProcessingException):
                     raise
-                except Exception as pdf_err:
+                except (IOError, OSError) as pdf_err:
                     raise InvalidInputException(f"Failed to open or render corrupted PDF document: {str(pdf_err)}")
+                except Exception as pdf_err:
+                    if "corrupt" in str(pdf_err).lower() or "pdf" in str(pdf_err).lower():
+                        raise InvalidInputException(f"Failed to open or render corrupted PDF document: {str(pdf_err)}")
+                    raise
                 finally:
                     if pdf is not None:
                         try:
