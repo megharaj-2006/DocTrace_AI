@@ -1,4 +1,3 @@
-ALTER TABLE users
-    DROP COLUMN first_name,
-    DROP COLUMN last_name,
-    ADD COLUMN full_name VARCHAR(255) NOT NULL;
+ALTER TABLE users DROP COLUMN first_name;
+ALTER TABLE users DROP COLUMN last_name;
+ALTER TABLE users ADD COLUMN full_name VARCHAR(255) NOT NULL;
