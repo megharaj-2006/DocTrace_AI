@@ -127,7 +127,7 @@ class DocumentClassifier:
         return matched
 
     def classify_and_gate(self, processed_doc: ProcessedDocument) -> DocumentClassification:
-        """Perform document classification and relevance gating on processed document."""
+        """Perform layout-aware document classification and relevance gating on processed document."""
         # 1. Aggregate OCR and layout metrics across all pages
         total_text = " ".join(p.text for p in processed_doc.pages).strip()
         total_chars = len(total_text)
@@ -139,7 +139,7 @@ class DocumentClassifier:
         all_confs = [r.confidence for p in processed_doc.pages for r in p.ocr_regions]
         mean_ocr_conf = (sum(all_confs) / len(all_confs)) if all_confs else 0.0
 
-        # Check table/header presence in layout
+        # Calculate layout structural metrics
         has_table_layout = any(
             r.label.lower() in {"table", "tabular"}
             for p in processed_doc.pages for r in p.layout_regions
@@ -148,6 +148,17 @@ class DocumentClassifier:
             r.label.lower() in {"header", "title", "heading"}
             for p in processed_doc.pages for r in p.layout_regions
         )
+        
+        # Calculate figure / image area dominance ratio across pages
+        total_page_area = sum(p.width * p.height for p in processed_doc.pages if p.width > 0 and p.height > 0) or 1
+        total_figure_area = 0
+        for p in processed_doc.pages:
+            for r in p.layout_regions:
+                if r.label.lower() in {"figure", "image", "photo", "illustration"}:
+                    w = max(0, r.bbox[2] - r.bbox[0])
+                    h = max(0, r.bbox[3] - r.bbox[1])
+                    total_figure_area += (w * h)
+        figure_area_ratio = min(1.0, total_figure_area / total_page_area)
 
         # 2. Extract domain keywords using word-boundary matching
         text_lower = total_text.lower()
@@ -162,10 +173,14 @@ class DocumentClassifier:
         # Extract provider information
         provider_info = self.extract_provider_info(total_text, first_page_lines)
 
+        has_billing_signals = bool(detected_invoice_kw)
+        has_medical_signals = bool(detected_med_kw or detected_rx_kw or detected_lab_kw)
+        has_provider = bool(provider_info and provider_info.name and provider_info.confidence >= 0.70)
+
         # 3. Evaluate Relevance & Gating Logic
         reasons: List[str] = []
 
-        # REJECTION CONDITION 1: Almost zero text or no OCR content (e.g. photo / non-document / landscape)
+        # REJECTION CONDITION 1: Almost zero text or no OCR content (e.g. photo / non-document / blur)
         if total_chars < self.min_text_chars:
             reasons.append(
                 "Document Rejected: Uploaded file is an irrelevant document and does not belong to accepted medical document categories (medical invoices, laboratory reports, or prescriptions)."
@@ -181,14 +196,30 @@ class DocumentClassifier:
                 detected_keywords=[],
                 provider_info=None,
                 is_medical_document=False,
-                metadata={"total_chars": total_chars, "mean_ocr_conf": mean_ocr_conf},
+                metadata={"total_chars": total_chars, "mean_ocr_conf": mean_ocr_conf, "figure_area_ratio": round(figure_area_ratio, 3)},
             )
 
-        # REJECTION CONDITION 2: No medical or invoice domain keywords and no recognizable medical provider
-        has_domain_keywords = bool(all_detected_kw)
-        has_provider = bool(provider_info and provider_info.name and provider_info.confidence >= 0.70)
+        # REJECTION CONDITION 2: Figure / graphic dominance without structured claim tables
+        if figure_area_ratio > 0.60 and not has_table_layout and total_ocr_regions < 6:
+            reasons.append(
+                "Document Rejected: Uploaded file is an image/graphic and not an accepted structured medical claim document."
+            )
+            reasons.append(
+                "Relevance Gate: Layout is dominated by non-document imagery or graphics rather than structured billing forms, tables, or clinical records."
+            )
+            return DocumentClassification(
+                document_type=DocumentType.IRRELEVANT,
+                relevance_status=RelevanceStatus.IRRELEVANT,
+                confidence=0.95,
+                reasons=reasons,
+                detected_keywords=all_detected_kw,
+                provider_info=None,
+                is_medical_document=False,
+                metadata={"total_chars": total_chars, "figure_area_ratio": round(figure_area_ratio, 3)},
+            )
 
-        if not has_domain_keywords and not has_provider:
+        # REJECTION CONDITION 3: Complete lack of domain terminology and healthcare provider
+        if not has_billing_signals and not has_medical_signals and not has_provider:
             reasons.append(
                 "Document Rejected: Uploaded file is an irrelevant document and does not belong to accepted medical document categories (medical invoices, laboratory reports, or prescriptions)."
             )
@@ -206,11 +237,49 @@ class DocumentClassifier:
                 metadata={"total_chars": total_chars, "mean_ocr_conf": mean_ocr_conf},
             )
 
+        # REJECTION CONDITION 4: Commercial / Non-Medical Bill (Billing terms present, but ZERO medical context and NO medical provider)
+        if has_billing_signals and not has_medical_signals and not has_provider:
+            reasons.append(
+                "Document Rejected: Uploaded file is a commercial / non-medical invoice or receipt and not an accepted medical claim document."
+            )
+            reasons.append(
+                "Relevance Gate: Document contains commercial billing terms but lacks required healthcare or clinical context (patient name, physician, hospital/clinic provider, treatments, or medical services)."
+            )
+            return DocumentClassification(
+                document_type=DocumentType.IRRELEVANT,
+                relevance_status=RelevanceStatus.IRRELEVANT,
+                confidence=0.95,
+                reasons=reasons,
+                detected_keywords=all_detected_kw,
+                provider_info=provider_info,
+                is_medical_document=False,
+                metadata={"total_chars": total_chars, "detected_invoice_kw": detected_invoice_kw},
+            )
+
+        # REJECTION CONDITION 5: Unstructured continuous text / non-form document with weak isolated medical terms
+        if not has_billing_signals and not has_provider and len(detected_med_kw) <= 1 and not has_table_layout and not (detected_rx_kw or detected_lab_kw) and total_chars > 300:
+            reasons.append(
+                "Document Rejected: Uploaded file lacks structured medical reimbursement formatting (invoice table, laboratory grid, or prescription format)."
+            )
+            reasons.append(
+                "Relevance Gate: General non-claim text or unstructured document excluded from medical template analysis."
+            )
+            return DocumentClassification(
+                document_type=DocumentType.IRRELEVANT,
+                relevance_status=RelevanceStatus.IRRELEVANT,
+                confidence=0.90,
+                reasons=reasons,
+                detected_keywords=all_detected_kw,
+                provider_info=provider_info,
+                is_medical_document=False,
+                metadata={"total_chars": total_chars},
+            )
+
         # 4. Classification Scoring
-        score_invoice = len(detected_invoice_kw) * 1.5 + (2.0 if has_table_layout else 0.0)
-        score_rx = len(detected_rx_kw) * 1.5
-        score_lab = len(detected_lab_kw) * 1.5
-        score_med = len(detected_med_kw) * 1.0
+        score_invoice = len(detected_invoice_kw) * 1.5 + (2.0 if has_table_layout else 0.0) + (1.5 if (has_medical_signals or has_provider) else 0.0)
+        score_rx = len(detected_rx_kw) * 2.0 + (1.0 if has_provider else 0.0)
+        score_lab = len(detected_lab_kw) * 2.0 + (1.5 if has_table_layout else 0.0)
+        score_med = len(detected_med_kw) * 1.0 + (1.5 if has_provider else 0.0)
 
         scores = {
             DocumentType.INVOICE: score_invoice,
@@ -254,11 +323,11 @@ class DocumentClassifier:
 
         # Build explainable reasons
         if best_type == DocumentType.INVOICE:
-            reasons.append("Identified as medical invoice / billing document based on tabular and billing terms.")
+            reasons.append("Identified as medical invoice / billing document based on tabular claim structure and healthcare billing terms.")
         elif best_type == DocumentType.PRESCRIPTION:
             reasons.append("Identified as medical prescription based on clinical and medication terms.")
         elif best_type == DocumentType.LAB_REPORT:
-            reasons.append("Identified as diagnostic / laboratory report based on investigation terms.")
+            reasons.append("Identified as diagnostic / laboratory report based on investigation and specimen reference terms.")
         else:
             reasons.append("Identified as medical claim document based on clinical domain terms.")
 
@@ -281,5 +350,6 @@ class DocumentClassifier:
                 "scores": scores,
                 "has_table": has_table_layout,
                 "has_header": has_header_layout,
+                "figure_area_ratio": round(figure_area_ratio, 3),
             },
         )

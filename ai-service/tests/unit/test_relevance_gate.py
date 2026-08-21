@@ -111,7 +111,7 @@ def test_random_cow_image_rejected_as_irrelevant():
     assert classification.relevance_status == RelevanceStatus.IRRELEVANT
     assert classification.document_type == DocumentType.IRRELEVANT
     assert classification.is_medical_document is False
-    assert any("Insufficient recognized text" in r for r in classification.reasons)
+    assert any("Insufficient readable text" in r or "Insufficient recognized text" in r for r in classification.reasons)
 
 
 def test_random_landscape_rejected_as_irrelevant():
@@ -128,11 +128,58 @@ def test_random_landscape_rejected_as_irrelevant():
     assert classification.is_medical_document is False
 
 
+def test_commercial_non_medical_receipt_rejected_as_irrelevant():
+    """TEST 6: Commercial retail/restaurant bill with billing terms but ZERO medical context is REJECTED."""
+    classifier = DocumentClassifier()
+    text = "Star Cafe Coffee Shop Tax Invoice Bill No 9876 Espresso Coffee 150 Cheese Sandwich 250 Total Amount 400 GST 5%"
+    lines = [
+        "Star Cafe Coffee Shop",
+        "Tax Invoice / Cash Memo",
+        "Bill No: 9876",
+        "1x Espresso Coffee: 150",
+        "1x Cheese Sandwich: 250",
+        "Total Amount: 400",
+    ]
+    doc = make_processed_doc(text, lines, layout_types=["header", "table", "text"])
+
+    classification = classifier.classify_and_gate(doc)
+
+    assert classification.relevance_status == RelevanceStatus.IRRELEVANT
+    assert classification.document_type == DocumentType.IRRELEVANT
+    assert classification.is_medical_document is False
+    assert any("commercial / non-medical invoice" in r for r in classification.reasons)
+
+
+def test_dominant_graphic_rejected_as_irrelevant():
+    """TEST 7: Graphic-dominated poster/slide with text is REJECTED by layout gate."""
+    classifier = DocumentClassifier()
+    text = "Summer Beach Resort Travel Vacation Discount"
+    lines = ["Summer Beach Resort", "Travel Vacation Discount"]
+    
+    # Create page where figure covers 75% of area
+    layout_regions = [
+        LayoutRegion(label="figure", bbox=[0, 0, 600, 650], confidence=0.95),
+        LayoutRegion(label="text", bbox=[10, 660, 500, 750], confidence=0.85),
+    ]
+    ocr_regions = [
+        OCRRegion(text=line, bbox=[[10, 660], [200, 660], [200, 700], [10, 700]], confidence=0.90)
+        for line in lines
+    ]
+    page = PageData(page_number=1, width=600, height=800, text=text, ocr_regions=ocr_regions, layout_regions=layout_regions)
+    doc = ProcessedDocument(document_id="DOC-GRAPHIC-01", pages=[page], metadata={"total_pages": 1})
+
+    classification = classifier.classify_and_gate(doc)
+
+    assert classification.relevance_status == RelevanceStatus.IRRELEVANT
+    assert classification.document_type == DocumentType.IRRELEVANT
+    assert classification.is_medical_document is False
+
+
 def test_low_confidence_document_triggers_review():
-    """TEST 6: Document with degraded OCR confidence triggers LOW_CONFIDENCE_REVIEW."""
+    """TEST 8: Document with degraded OCR confidence triggers LOW_CONFIDENCE_REVIEW."""
     classifier = DocumentClassifier(min_confidence=0.60)
-    text = "Hospital bill total amt 1200"
-    lines = ["Hosp... bl...", "tot... 12.."]
+    text = "Hospital bill total amt 1200 patient treatment"
+    lines = ["Hospital bill", "patient treatment", "tot 1200"]
     doc = make_processed_doc(text, lines, layout_types=["text"], mean_conf=0.30)
 
     classification = classifier.classify_and_gate(doc)

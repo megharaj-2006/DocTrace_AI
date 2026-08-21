@@ -151,12 +151,17 @@ class AnalysisService:
                 classification.confidence,
             )
 
-            # --- IRRELEVANT DOCUMENT HANDLING ---
-            if classification.relevance_status == RelevanceStatus.IRRELEVANT:
+            # --- IRRELEVANT DOCUMENT HANDLING & CORPUS PROTECTION ---
+            if (
+                classification.relevance_status == RelevanceStatus.IRRELEVANT
+                or classification.document_type == DocumentType.IRRELEVANT
+                or not classification.is_medical_document
+            ):
                 logger.warning(
-                    "Document '%s' REJECTED by Relevance Gate as IRRELEVANT (type=%s). "
-                    "Skipping DINOv2 inference, structural fingerprinting, and vector store registration.",
+                    "Document '%s' REJECTED by Relevance Gate (status=%s, type=%s). "
+                    "Skipping DINOv2 inference, structural fingerprinting, and vector store registration to protect corpus.",
                     document_id,
+                    classification.relevance_status.value,
                     classification.document_type.value,
                 )
                 reasons = list(classification.reasons)

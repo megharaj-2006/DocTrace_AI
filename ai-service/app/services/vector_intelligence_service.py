@@ -93,7 +93,11 @@ class VectorIntelligenceService:
             len(structural_matches),
         )
 
-        # 3. Register BOTH embeddings into trusted corpus AFTER search
+        # 3. Register BOTH embeddings into trusted corpus AFTER search (ONLY FOR VALID MEDICAL CLAIMS)
+        if doc_type_str.upper() in {"IRRELEVANT", "UNKNOWN"} or not doc_type_str:
+            logger.warning("Corpus Protection: Ingestion blocked for non-medical / IRRELEVANT document '%s'", document_id)
+            return visual_matches, structural_matches, visual_emb, structural_emb
+
         extra_payload = {
             "document_type": doc_type_str,
             "provider_name": provider_name,
