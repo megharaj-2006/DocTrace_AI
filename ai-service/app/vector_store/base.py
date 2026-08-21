@@ -19,7 +19,7 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    async def upsert_page_embedding(self, embedding: PageEmbedding) -> bool:
+    async def upsert_page_embedding(self, embedding: PageEmbedding, payload_extra: Optional[Dict[str, Any]] = None) -> bool:
         """Upsert a page embedding into vector store using deterministic point ID."""
         pass
 
@@ -30,8 +30,9 @@ class VectorStore(ABC):
         top_k: int = 5,
         exclude_document_id: Optional[str] = None,
         min_similarity: Optional[float] = None,
+        document_type: Optional[str] = None,
     ) -> List[PageSimilarityMatch]:
-        """Search nearest page embeddings, supporting current-document self-match exclusion."""
+        """Search nearest page embeddings, supporting self-match exclusion and document-type filtering."""
         pass
 
     @abstractmethod
@@ -42,6 +43,28 @@ class VectorStore(ABC):
     @abstractmethod
     async def is_healthy(self) -> bool:
         """Check connection / readiness health of the vector store backend."""
+        pass
+
+    @abstractmethod
+    async def ensure_structural_collection(self) -> bool:
+        """Ensure structural collection exists with vector size=128 and Cosine distance."""
+        pass
+
+    @abstractmethod
+    async def upsert_structural_embedding(self, embedding: Any, payload_extra: Optional[Dict[str, Any]] = None) -> bool:
+        """Upsert a structural page embedding into the structural collection."""
+        pass
+
+    @abstractmethod
+    async def search_nearest_structural(
+        self,
+        query_vector: List[float],
+        top_k: int = 5,
+        exclude_document_id: Optional[str] = None,
+        min_similarity: Optional[float] = None,
+        document_type: Optional[str] = None,
+    ) -> List[PageSimilarityMatch]:
+        """Search nearest structural page embeddings with self-match exclusion and document-type filtering."""
         pass
 
     # Legacy methods maintained for backward compatibility
@@ -69,4 +92,5 @@ class VectorStore(ABC):
     async def delete_vector(self, document_id: str) -> bool:
         """Delete a document vector entry by document ID."""
         pass
+
 

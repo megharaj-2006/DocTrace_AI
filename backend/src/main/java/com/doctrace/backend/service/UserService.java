@@ -14,9 +14,15 @@ import org.springframework.stereotype.Service;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository,
+                       org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
+                       AuditLogService auditLogService) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.auditLogService = auditLogService;
     }
 
     public User findById(Long id) {
@@ -35,6 +41,16 @@ public class UserService {
             user.setFullName(fullName);
         }
         return userRepository.save(user);
+    }
+
+    public void changePassword(String email, String currentPassword, String newPassword) {
+        User user = findByEmail(email);
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new IllegalArgumentException("Current password does not match.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        auditLogService.log(user, "PASSWORD_CHANGED", "User", user.getId().toString(), "User updated password");
     }
 
     public Page<User> findAll(Pageable pageable) {

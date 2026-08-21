@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,7 +31,7 @@ public class AnalysisController {
     @Operation(summary = "Trigger AI analysis for an invoice")
     @PostMapping("/analyze")
     public ResponseEntity<AnalysisResultResponse> analyze(
-            @PathVariable Long invoiceId,
+            @PathVariable String invoiceId,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User user = userService.findByEmail(userDetails.getUsername());
@@ -40,8 +41,9 @@ public class AnalysisController {
 
     @Operation(summary = "Get the latest analysis result for an invoice")
     @GetMapping("/analysis")
+    @Transactional(readOnly = true)
     public ResponseEntity<AnalysisResultResponse> getAnalysis(
-            @PathVariable Long invoiceId,
+            @PathVariable String invoiceId,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.findByEmail(userDetails.getUsername());
         return ResponseEntity.ok(analysisService.getLatestAnalysis(invoiceId, user));
@@ -49,8 +51,9 @@ public class AnalysisController {
 
     @Operation(summary = "Get full analysis history for an invoice")
     @GetMapping("/analysis/history")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<AnalysisResultResponse>> getHistory(
-            @PathVariable Long invoiceId,
+            @PathVariable String invoiceId,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.findByEmail(userDetails.getUsername());
         return ResponseEntity.ok(analysisService.getAnalysisHistory(invoiceId, user));
@@ -58,8 +61,9 @@ public class AnalysisController {
 
     @Operation(summary = "Get similar documents from the latest analysis")
     @GetMapping("/similar")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<SimilarDocumentResponse>> getSimilar(
-            @PathVariable Long invoiceId,
+            @PathVariable String invoiceId,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.findByEmail(userDetails.getUsername());
         AnalysisResultResponse result = analysisService.getLatestAnalysis(invoiceId, user);

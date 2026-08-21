@@ -38,6 +38,7 @@ public class AnalysisService {
     private final InvoiceRepository invoiceRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final FraudAlertRepository fraudAlertRepository;
+    private final com.doctrace.backend.repository.ProviderRepository providerRepository;
     private final AiServiceClient aiServiceClient;
     private final FileStorageService fileStorageService;
     private final AuditLogService auditLogService;
@@ -46,6 +47,7 @@ public class AnalysisService {
     public AnalysisService(InvoiceRepository invoiceRepository,
                            AnalysisResultRepository analysisResultRepository,
                            FraudAlertRepository fraudAlertRepository,
+                           com.doctrace.backend.repository.ProviderRepository providerRepository,
                            AiServiceClient aiServiceClient,
                            FileStorageService fileStorageService,
                            AuditLogService auditLogService,
@@ -53,6 +55,7 @@ public class AnalysisService {
         this.invoiceRepository = invoiceRepository;
         this.analysisResultRepository = analysisResultRepository;
         this.fraudAlertRepository = fraudAlertRepository;
+        this.providerRepository = providerRepository;
         this.aiServiceClient = aiServiceClient;
         this.fileStorageService = fileStorageService;
         this.auditLogService = auditLogService;
@@ -61,11 +64,15 @@ public class AnalysisService {
 
     /**
      * Analyze an invoice via the AI service.
-     * The workflow: mark ANALYZING → call AI → persist result → create alert if needed → mark ANALYZED → clean up temporary document file.
+     * The workflow: mark ANALYZING → call AI → persist result → create alert if needed → mark ANALYZED.
+     * The uploaded invoice binary is preserved in storage for subsequent investigator download and audit.
      */
     public AnalysisResultResponse analyzeInvoice(Long invoiceId, User requestedBy) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        return analyzeInvoice(String.valueOf(invoiceId), requestedBy);
+    }
+
+    public AnalysisResultResponse analyzeInvoice(String invoiceIdentifier, User requestedBy) {
+        Invoice invoice = findInvoiceByIdentifier(invoiceIdentifier);
 
         validateAccess(invoice, requestedBy);
 
@@ -91,35 +98,28 @@ public class AnalysisService {
                     invoice.getDocumentId()
             );
 
-            // Persist results
-            AnalysisResultResponse response = persistAnalysisResult(invoice, aiResponse, requestedBy);
-
-            // Clean up temporary uploaded file binary from disk per lifecycle requirement
-            cleanupTemporaryFile(invoice);
-
-            return response;
+            // Persist results & auto-link provider if extracted
+            return persistAnalysisResult(invoice, aiResponse, requestedBy);
 
         } catch (AiServiceException e) {
             // Mark as FAILED and persist error
             markFailed(invoice, e.getMessage());
-            cleanupTemporaryFile(invoice);
             throw e;
         } catch (Exception e) {
             markFailed(invoice, e.getMessage());
-            cleanupTemporaryFile(invoice);
             throw new AiServiceException("Analysis failed: " + e.getMessage(), e);
         }
     }
 
-    private void cleanupTemporaryFile(Invoice invoice) {
-        if (invoice.getStoredFilename() != null) {
-            try {
-                fileStorageService.delete(invoice.getStoredFilename());
-                log.info("Temporary invoice file binary cleaned up from disk: invoiceId={}, documentId={}",
-                        invoice.getId(), invoice.getDocumentId());
-            } catch (Exception e) {
-                log.warn("Failed to clean up temporary invoice file: {}", invoice.getStoredFilename(), e);
-            }
+    public Invoice findInvoiceByIdentifier(String identifier) {
+        try {
+            Long id = Long.parseLong(identifier);
+            return invoiceRepository.findById(id)
+                    .orElseGet(() -> invoiceRepository.findByDocumentId(identifier)
+                            .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", identifier)));
+        } catch (NumberFormatException e) {
+            return invoiceRepository.findByDocumentId(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "documentId", identifier));
         }
     }
 
@@ -146,6 +146,25 @@ public class AnalysisService {
         result.setConfidence(aiResponse.confidence());
         result.setReasons(aiResponse.reasons() != null ? aiResponse.reasons() : List.of());
         result.setAnalyzedAt(Instant.now());
+
+        // Extract and auto-link provider if identified in reasons
+        if (aiResponse.reasons() != null) {
+            for (String reason : aiResponse.reasons()) {
+                if (reason != null && reason.contains("Detected healthcare provider: '")) {
+                    int start = reason.indexOf("Detected healthcare provider: '") + 31;
+                    int end = reason.indexOf("'", start);
+                    if (start > 0 && end > start) {
+                        String provName = reason.substring(start, end).trim();
+                        if (!provName.isEmpty()) {
+                            Provider provider = providerRepository.findFirstByNameIgnoreCase(provName)
+                                    .orElseGet(() -> providerRepository.save(new Provider(provName)));
+                            invoice.setProvider(provider);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         // Add matched documents
         if (aiResponse.matchedDocuments() != null) {
@@ -209,15 +228,20 @@ public class AnalysisService {
         }
     }
 
+    @Transactional(readOnly = true)
     public AnalysisResultResponse getLatestAnalysis(Long invoiceId, User user) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        return getLatestAnalysis(String.valueOf(invoiceId), user);
+    }
+
+    @Transactional(readOnly = true)
+    public AnalysisResultResponse getLatestAnalysis(String invoiceIdentifier, User user) {
+        Invoice invoice = findInvoiceByIdentifier(invoiceIdentifier);
         validateAccess(invoice, user);
 
         AnalysisResult result = analysisResultRepository
-                .findTopByInvoiceIdOrderByCreatedAtDesc(invoiceId)
+                .findTopByInvoiceIdOrderByCreatedAtDesc(invoice.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "No analysis found for invoice " + invoiceId));
+                        "No analysis found for invoice " + invoiceIdentifier));
 
         // Eagerly fetch similar documents for the response
         result = analysisResultRepository.findByIdWithSimilarDocuments(result.getId())
@@ -226,15 +250,19 @@ public class AnalysisService {
         return entityMapper.toAnalysisResultResponse(result);
     }
 
+    @Transactional(readOnly = true)
     public List<AnalysisResultResponse> getAnalysisHistory(Long invoiceId, User user) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        return getAnalysisHistory(String.valueOf(invoiceId), user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AnalysisResultResponse> getAnalysisHistory(String invoiceIdentifier, User user) {
+        Invoice invoice = findInvoiceByIdentifier(invoiceIdentifier);
         validateAccess(invoice, user);
 
-        return analysisResultRepository.findByInvoiceIdOrderByCreatedAtDesc(invoiceId)
+        return analysisResultRepository.findByInvoiceIdOrderByCreatedAtDesc(invoice.getId())
                 .stream()
                 .map(entityMapper::toAnalysisResultResponse)
                 .toList();
     }
-
 }

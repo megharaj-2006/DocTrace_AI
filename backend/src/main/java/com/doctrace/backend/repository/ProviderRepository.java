@@ -9,5 +9,7 @@ public interface ProviderRepository extends JpaRepository<Provider, Long> {
 
     Optional<Provider> findByRegistrationNumber(String registrationNumber);
 
+    Optional<Provider> findFirstByNameIgnoreCase(String name);
+
     boolean existsByRegistrationNumber(String registrationNumber);
 }

@@ -10,10 +10,11 @@ import java.util.Optional;
 
 public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, Long> {
 
-    /** Most recent analysis for an invoice. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"similarDocuments", "invoice"})
     Optional<AnalysisResult> findTopByInvoiceIdOrderByCreatedAtDesc(Long invoiceId);
 
     /** Full analysis history for an invoice, newest first. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"similarDocuments", "invoice"})
     List<AnalysisResult> findByInvoiceIdOrderByCreatedAtDesc(Long invoiceId);
 
     @Query("SELECT COUNT(ar) FROM AnalysisResult ar WHERE ar.riskLevel = com.doctrace.backend.entity.RiskLevel.RED")
@@ -37,4 +38,8 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
             WHERE ar.id = :id
             """)
     Optional<AnalysisResult> findByIdWithSimilarDocuments(@Param("id") Long id);
+
+    @Query(value = "SELECT ar FROM AnalysisResult ar LEFT JOIN FETCH ar.similarDocuments LEFT JOIN FETCH ar.invoice",
+           countQuery = "SELECT COUNT(ar) FROM AnalysisResult ar")
+    org.springframework.data.domain.Page<AnalysisResult> findAll(org.springframework.data.domain.Pageable pageable);
 }

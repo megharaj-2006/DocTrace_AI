@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Providers", description = "Healthcare provider / hospital management")
@@ -44,6 +45,7 @@ public class ProviderController {
 
     @Operation(summary = "List all providers")
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<Page<ProviderResponse>> list(@PageableDefault(size = 20) Pageable pageable) {
         Page<ProviderResponse> page = providerService.findAll(pageable)
                 .map(entityMapper::toProviderResponse);
@@ -52,6 +54,7 @@ public class ProviderController {
 
     @Operation(summary = "Get provider details by ID")
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<ProviderResponse> getById(@PathVariable Long id) {
         Provider provider = providerService.findById(id);
         return ResponseEntity.ok(entityMapper.toProviderResponse(provider));
@@ -59,6 +62,7 @@ public class ProviderController {
 
     @Operation(summary = "List invoices for a specific provider")
     @GetMapping("/{id}/invoices")
+    @Transactional(readOnly = true)
     public ResponseEntity<Page<InvoiceResponse>> getProviderInvoices(
             @PathVariable Long id,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -73,6 +77,7 @@ public class ProviderController {
     @Operation(summary = "Create a new provider (ADMIN only)")
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
+    @Transactional
     public ResponseEntity<ProviderResponse> create(
             @Valid @RequestBody ProviderRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -85,6 +90,7 @@ public class ProviderController {
     @Operation(summary = "Update an existing provider (ADMIN only)")
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
+    @Transactional
     public ResponseEntity<ProviderResponse> update(
             @PathVariable Long id,
             @Valid @RequestBody ProviderRequest request,

@@ -52,7 +52,8 @@ public class EntityMapper {
 
         return new AnalysisResultResponse(
                 result.getId(),
-                result.getInvoice().getDocumentId(),
+                result.getInvoice() != null ? result.getInvoice().getId() : null,
+                result.getInvoice() != null ? result.getInvoice().getDocumentId() : null,
                 result.getFraudScore(),
                 result.getRiskLevel().name(),
                 result.getConfidence(),

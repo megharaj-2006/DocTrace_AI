@@ -12,12 +12,18 @@ def test_ocr_service_mock_inference():
 
     # Mock PaddleOCR engine output
     mock_engine = MagicMock()
-    mock_engine.ocr.return_value = [
-        [
-            [[[10, 10], [50, 10], [50, 30], [10, 30]], ("PATIENT NAME", 0.96)],
-            [[[10, 40], [100, 40], [100, 60], [10, 60]], ("JOHN DOE", 0.99)],
-        ]
-    ]
+    mock_result = MagicMock()
+    mock_result.json.return_value = {
+        "res": {
+            "rec_texts": ["PATIENT NAME", "JOHN DOE"],
+            "rec_scores": [0.96, 0.99],
+            "rec_polys": [
+                [[10, 10], [50, 10], [50, 30], [10, 30]],
+                [[10, 40], [100, 40], [100, 60], [10, 60]],
+            ],
+        }
+    }
+    mock_engine.predict.return_value = [mock_result]
     ocr_srv._ocr_engine = mock_engine
 
     img_dummy = np.zeros((100, 100, 3), dtype=np.uint8)

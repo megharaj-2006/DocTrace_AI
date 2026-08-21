@@ -21,6 +21,7 @@ import java.util.UUID;
  * Invoice lifecycle management: upload, retrieval, search.
  */
 @Service
+@Transactional(readOnly = true)
 public class InvoiceService {
 
     private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
@@ -81,6 +82,30 @@ public class InvoiceService {
     public Invoice findByDocumentId(String documentId) {
         return invoiceRepository.findByDocumentId(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "documentId", documentId));
+    }
+
+    public Invoice findByDocumentIdForUser(String documentId, User user) {
+        Invoice invoice = findByDocumentId(documentId);
+        validateAccess(invoice, user);
+        return invoice;
+    }
+
+    public Invoice findByIdOrDocumentId(String identifier) {
+        try {
+            Long id = Long.parseLong(identifier);
+            return invoiceRepository.findById(id)
+                    .orElseGet(() -> invoiceRepository.findByDocumentId(identifier)
+                            .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", identifier)));
+        } catch (NumberFormatException e) {
+            return invoiceRepository.findByDocumentId(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "documentId", identifier));
+        }
+    }
+
+    public Invoice findByIdOrDocumentIdForUser(String identifier, User user) {
+        Invoice invoice = findByIdOrDocumentId(identifier);
+        validateAccess(invoice, user);
+        return invoice;
     }
 
     public Page<Invoice> findAll(Pageable pageable) {

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Dashboard", description = "System statistics and aggregates")
 @RestController
 @RequestMapping("/api/v1/dashboard")
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class DashboardController {
 
     private final DashboardService dashboardService;
@@ -36,5 +37,11 @@ public class DashboardController {
     @GetMapping("/similarity-statistics")
     public ResponseEntity<com.doctrace.backend.dto.response.SimilarityStatisticsResponse> getSimilarityStatistics() {
         return ResponseEntity.ok(dashboardService.getSimilarityStatistics());
+    }
+
+    @Operation(summary = "Get alerts and analysis trends over time")
+    @GetMapping("/trends")
+    public ResponseEntity<java.util.List<com.doctrace.backend.dto.response.DashboardTrendItem>> getTrends() {
+        return ResponseEntity.ok(dashboardService.getTrends());
     }
 }

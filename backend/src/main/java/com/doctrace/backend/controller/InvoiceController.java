@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,9 +45,11 @@ public class InvoiceController {
 
     @Operation(summary = "Upload a new invoice (PDF/JPG/PNG, max 20 MB)")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Transactional
     public ResponseEntity<InvoiceResponse> upload(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal UserDetails userDetails) {
+
 
         User uploader = userService.findByEmail(userDetails.getUsername());
         Invoice invoice = invoiceService.upload(file, uploader);
@@ -56,6 +59,7 @@ public class InvoiceController {
 
     @Operation(summary = "List invoices (paginated)")
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<Page<InvoiceResponse>> list(
             @AuthenticationPrincipal UserDetails userDetails,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -65,23 +69,25 @@ public class InvoiceController {
         return ResponseEntity.ok(page);
     }
 
-    @Operation(summary = "Get invoice details by ID")
+    @Operation(summary = "Get invoice details by ID or documentId")
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<InvoiceResponse> getById(
-            @PathVariable Long id,
+            @PathVariable String id,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.findByEmail(userDetails.getUsername());
-        Invoice invoice = invoiceService.findByIdForUser(id, user);
+        Invoice invoice = invoiceService.findByIdOrDocumentIdForUser(id, user);
         return ResponseEntity.ok(entityMapper.toInvoiceResponse(invoice));
     }
 
     @Operation(summary = "Download the invoice file")
     @GetMapping("/{id}/file")
+    @Transactional(readOnly = true)
     public ResponseEntity<Resource> downloadFile(
-            @PathVariable Long id,
+            @PathVariable String id,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.findByEmail(userDetails.getUsername());
-        Invoice invoice = invoiceService.findByIdForUser(id, user);
+        Invoice invoice = invoiceService.findByIdOrDocumentIdForUser(id, user);
         Resource resource = fileStorageService.loadAsResource(invoice.getStoredFilename());
 
         return ResponseEntity.ok()
@@ -93,6 +99,7 @@ public class InvoiceController {
 
     @Operation(summary = "Search invoices by query string")
     @GetMapping("/search")
+    @Transactional(readOnly = true)
     public ResponseEntity<Page<InvoiceResponse>> search(
             @RequestParam(required = false) String query,
             @AuthenticationPrincipal UserDetails userDetails,
@@ -103,4 +110,3 @@ public class InvoiceController {
         return ResponseEntity.ok(page);
     }
 }
-

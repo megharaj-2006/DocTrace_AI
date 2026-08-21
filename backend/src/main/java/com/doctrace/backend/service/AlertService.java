@@ -22,6 +22,7 @@ import java.util.List;
  * Manages the investigator workflow for fraud alerts.
  */
 @Service
+@Transactional(readOnly = true)
 public class AlertService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertService.class);
@@ -110,11 +111,14 @@ public class AlertService {
 
     @Transactional
     public FraudAlert resolveAlert(Long alertId, com.doctrace.backend.dto.request.AlertResolveRequest request, User investigator) {
-        return updateStatus(alertId, new AlertStatusUpdateRequest("RESOLVED", request.resolution()), investigator);
+        String notes = request != null ? request.getEffectiveResolution() : "Claim verified and resolved by investigator.";
+        return updateStatus(alertId, new AlertStatusUpdateRequest("RESOLVED", notes), investigator);
     }
 
     @Transactional
     public FraudAlert dismissAlert(Long alertId, com.doctrace.backend.dto.request.AlertDismissRequest request, User investigator) {
-        return updateStatus(alertId, new AlertStatusUpdateRequest("DISMISSED", request.reason()), investigator);
+        String reason = (request != null && request.reason() != null && !request.reason().isBlank()) 
+                ? request.reason() : "False positive template similarity.";
+        return updateStatus(alertId, new AlertStatusUpdateRequest("DISMISSED", reason), investigator);
     }
 }

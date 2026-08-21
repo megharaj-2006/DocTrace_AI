@@ -13,10 +13,19 @@ class FailingVectorStore(VectorStore):
     async def ensure_collection(self) -> bool:
         raise ProcessingException("Qdrant cluster connection failed: Connection refused")
 
-    async def upsert_page_embedding(self, embedding) -> bool:
+    async def ensure_structural_collection(self) -> bool:
+        raise ProcessingException("Qdrant cluster connection failed: Connection refused")
+
+    async def upsert_page_embedding(self, embedding, payload_extra=None) -> bool:
+        raise ProcessingException("Qdrant cluster connection failed: Connection refused")
+
+    async def upsert_structural_embedding(self, embedding, payload_extra=None) -> bool:
         raise ProcessingException("Qdrant cluster connection failed: Connection refused")
 
     async def search_nearest_pages(self, query_vector, top_k=5, exclude_document_id=None, min_similarity=None):
+        raise ProcessingException("Qdrant cluster connection failed: Connection refused")
+
+    async def search_nearest_structural(self, query_vector, top_k=5, exclude_document_id=None, min_similarity=None):
         raise ProcessingException("Qdrant cluster connection failed: Connection refused")
 
     async def delete_document_embeddings(self, document_id: str) -> bool:
@@ -33,6 +42,7 @@ class FailingVectorStore(VectorStore):
 
     async def delete_vector(self, document_id: str) -> bool:
         raise ProcessingException("Qdrant failure")
+
 
 
 AUTH_HEADERS = {"X-Internal-API-Key": "dev-internal-secret-key-12345"}
@@ -76,10 +86,21 @@ def test_unsupported_file_format_raises_http_400(client):
 
 def test_qdrant_infrastructure_failure_surfaces_as_http_500(client, sample_png_content):
     """Verify Qdrant failure surfaces as HTTP 500 error instead of false 'no matches' success."""
+    from unittest.mock import MagicMock
     from app.api.routes.analysis import get_analysis_service
     from app.main import app
+    from app.schemas.document_understanding import DocumentClassification, DocumentType, RelevanceStatus
 
     failing_service = AnalysisService(vector_store=FailingVectorStore())
+    failing_service.document_classifier.classify_and_gate = MagicMock(
+        return_value=DocumentClassification(
+            relevance_status=RelevanceStatus.RELEVANT,
+            document_type=DocumentType.INVOICE,
+            confidence=0.95,
+            keywords_detected=["invoice", "total"],
+            reasons=["Valid test medical invoice"],
+        )
+    )
     app.dependency_overrides[get_analysis_service] = lambda: failing_service
 
     try:
@@ -93,4 +114,5 @@ def test_qdrant_infrastructure_failure_surfaces_as_http_500(client, sample_png_c
         assert "Qdrant" in response.json()["detail"] or "Failed to process document" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
 

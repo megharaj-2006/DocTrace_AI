@@ -18,6 +18,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Alerts", description = "Fraud alert management and investigator workflow")
@@ -39,6 +40,7 @@ public class AlertController {
 
     @Operation(summary = "List all fraud alerts (paginated, optional filters)")
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<Page<AlertResponse>> list(
             @RequestParam(required = false) AlertStatus status,
             @RequestParam(required = false) RiskLevel riskLevel,
@@ -61,6 +63,7 @@ public class AlertController {
 
     @Operation(summary = "Get alert details by ID")
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<AlertResponse> getById(@PathVariable Long id) {
         FraudAlert alert = alertService.findById(id);
         return ResponseEntity.ok(entityMapper.toAlertResponse(alert));
@@ -68,6 +71,7 @@ public class AlertController {
 
     @Operation(summary = "Assign alert to current investigator")
     @PostMapping("/{id}/assign")
+    @Transactional
     public ResponseEntity<AlertResponse> assign(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -78,6 +82,7 @@ public class AlertController {
 
     @Operation(summary = "Update alert status (e.g., to RESOLVED or DISMISSED)")
     @PatchMapping("/{id}/status")
+    @Transactional
     public ResponseEntity<AlertResponse> updateStatus(
             @PathVariable Long id,
             @Valid @RequestBody AlertStatusUpdateRequest request,
@@ -89,6 +94,7 @@ public class AlertController {
 
     @Operation(summary = "Mark an alert as resolved")
     @PostMapping("/{id}/resolve")
+    @Transactional
     public ResponseEntity<AlertResponse> resolve(
             @PathVariable Long id,
             @Valid @RequestBody com.doctrace.backend.dto.request.AlertResolveRequest request,
@@ -100,6 +106,7 @@ public class AlertController {
 
     @Operation(summary = "Dismiss an alert as a false positive")
     @PostMapping("/{id}/dismiss")
+    @Transactional
     public ResponseEntity<AlertResponse> dismiss(
             @PathVariable Long id,
             @Valid @RequestBody com.doctrace.backend.dto.request.AlertDismissRequest request,
