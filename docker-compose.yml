@@ -79,3 +79,14 @@ services:
       ai-service:
         condition: service_started
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: doctrace-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+

@@ -1,8 +1,16 @@
 import axios from "axios";
 import useAuthStore from "../store/authStore";
 
+const getBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && envUrl.trim() !== "") {
+    return envUrl.trim();
+  }
+  return "http://100.54.131.80:8080/api/v1";
+};
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
+  baseURL: getBaseURL(),
   headers: {
     "Content-Type": "application/json",
   },

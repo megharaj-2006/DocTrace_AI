@@ -70,23 +70,37 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.password) {
+    const cleanEmail = (form.email || "").trim();
+    const cleanPassword = form.password || "";
+    if (!cleanEmail || !cleanPassword) {
       setError("Please enter your email and password.");
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const data = await loginApi(form.email, form.password);
+      const data = await loginApi(cleanEmail, cleanPassword);
       const token = data.token || data.accessToken || data.jwt || data.data?.token;
-      const user = data.user || data.data?.user || { email: form.email, fullName: form.email.split("@")[0] };
+      if (!token) {
+        throw new Error("Authentication succeeded but no token was provided by the server.");
+      }
+      const user = data.user || data.data?.user || { email: cleanEmail, fullName: cleanEmail.split("@")[0] };
       setAuth(token, user);
       navigate("/dashboard");
     } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        "Invalid email or password. Please try again.";
+      console.error("Login attempt failed:", err);
+      let msg = "Invalid email or password. Please try again.";
+      if (!err.response) {
+        msg = `Connection error: Unable to reach backend server (${err.message || "Network Error"}). Please check network/CORS connectivity.`;
+      } else if (err.response.status === 401) {
+        msg = err.response.data?.message || err.response.data?.error || "Invalid email or password. Please check your credentials.";
+      } else if (err.response.status === 403) {
+        msg = err.response.data?.message || "Account is disabled or unauthorized.";
+      } else if (err.response.status >= 500) {
+        msg = err.response.data?.message || "Internal server error. Please try again in a few moments.";
+      } else if (err.response.data?.message) {
+        msg = err.response.data.message;
+      }
       setError(msg);
     } finally {
       setLoading(false);
