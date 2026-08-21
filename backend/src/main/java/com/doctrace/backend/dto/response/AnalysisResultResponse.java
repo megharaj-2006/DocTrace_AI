@@ -5,6 +5,7 @@ import java.util.List;
 
 public record AnalysisResultResponse(
         Long id,
+        Long invoiceId,
         String documentId,
         double fraudScore,
         String riskLevel,
@@ -15,3 +16,4 @@ public record AnalysisResultResponse(
         Instant analyzedAt,
         Instant createdAt
 ) {}
+

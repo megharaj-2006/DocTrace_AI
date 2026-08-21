@@ -50,6 +50,7 @@ public class InvoiceController {
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal UserDetails userDetails) {
 
+
         User uploader = userService.findByEmail(userDetails.getUsername());
         Invoice invoice = invoiceService.upload(file, uploader);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -68,14 +69,14 @@ public class InvoiceController {
         return ResponseEntity.ok(page);
     }
 
-    @Operation(summary = "Get invoice details by ID")
+    @Operation(summary = "Get invoice details by ID or documentId")
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public ResponseEntity<InvoiceResponse> getById(
-            @PathVariable Long id,
+            @PathVariable String id,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.findByEmail(userDetails.getUsername());
-        Invoice invoice = invoiceService.findByIdForUser(id, user);
+        Invoice invoice = invoiceService.findByIdOrDocumentIdForUser(id, user);
         return ResponseEntity.ok(entityMapper.toInvoiceResponse(invoice));
     }
 
@@ -83,10 +84,10 @@ public class InvoiceController {
     @GetMapping("/{id}/file")
     @Transactional(readOnly = true)
     public ResponseEntity<Resource> downloadFile(
-            @PathVariable Long id,
+            @PathVariable String id,
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = userService.findByEmail(userDetails.getUsername());
-        Invoice invoice = invoiceService.findByIdForUser(id, user);
+        Invoice invoice = invoiceService.findByIdOrDocumentIdForUser(id, user);
         Resource resource = fileStorageService.loadAsResource(invoice.getStoredFilename());
 
         return ResponseEntity.ok()

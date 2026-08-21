@@ -68,8 +68,11 @@ public class AnalysisService {
      * The uploaded invoice binary is preserved in storage for subsequent investigator download and audit.
      */
     public AnalysisResultResponse analyzeInvoice(Long invoiceId, User requestedBy) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        return analyzeInvoice(String.valueOf(invoiceId), requestedBy);
+    }
+
+    public AnalysisResultResponse analyzeInvoice(String invoiceIdentifier, User requestedBy) {
+        Invoice invoice = findInvoiceByIdentifier(invoiceIdentifier);
 
         validateAccess(invoice, requestedBy);
 
@@ -105,6 +108,18 @@ public class AnalysisService {
         } catch (Exception e) {
             markFailed(invoice, e.getMessage());
             throw new AiServiceException("Analysis failed: " + e.getMessage(), e);
+        }
+    }
+
+    public Invoice findInvoiceByIdentifier(String identifier) {
+        try {
+            Long id = Long.parseLong(identifier);
+            return invoiceRepository.findById(id)
+                    .orElseGet(() -> invoiceRepository.findByDocumentId(identifier)
+                            .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", identifier)));
+        } catch (NumberFormatException e) {
+            return invoiceRepository.findByDocumentId(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "documentId", identifier));
         }
     }
 
@@ -215,14 +230,18 @@ public class AnalysisService {
 
     @Transactional(readOnly = true)
     public AnalysisResultResponse getLatestAnalysis(Long invoiceId, User user) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        return getLatestAnalysis(String.valueOf(invoiceId), user);
+    }
+
+    @Transactional(readOnly = true)
+    public AnalysisResultResponse getLatestAnalysis(String invoiceIdentifier, User user) {
+        Invoice invoice = findInvoiceByIdentifier(invoiceIdentifier);
         validateAccess(invoice, user);
 
         AnalysisResult result = analysisResultRepository
-                .findTopByInvoiceIdOrderByCreatedAtDesc(invoiceId)
+                .findTopByInvoiceIdOrderByCreatedAtDesc(invoice.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "No analysis found for invoice " + invoiceId));
+                        "No analysis found for invoice " + invoiceIdentifier));
 
         // Eagerly fetch similar documents for the response
         result = analysisResultRepository.findByIdWithSimilarDocuments(result.getId())
@@ -233,14 +252,17 @@ public class AnalysisService {
 
     @Transactional(readOnly = true)
     public List<AnalysisResultResponse> getAnalysisHistory(Long invoiceId, User user) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        return getAnalysisHistory(String.valueOf(invoiceId), user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AnalysisResultResponse> getAnalysisHistory(String invoiceIdentifier, User user) {
+        Invoice invoice = findInvoiceByIdentifier(invoiceIdentifier);
         validateAccess(invoice, user);
 
-        return analysisResultRepository.findByInvoiceIdOrderByCreatedAtDesc(invoiceId)
+        return analysisResultRepository.findByInvoiceIdOrderByCreatedAtDesc(invoice.getId())
                 .stream()
                 .map(entityMapper::toAnalysisResultResponse)
                 .toList();
     }
-
 }

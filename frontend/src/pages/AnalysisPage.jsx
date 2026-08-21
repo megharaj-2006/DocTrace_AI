@@ -144,7 +144,7 @@ export default function AnalysisPage() {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
-                        onClick={() => navigate(`/invoices/${ar.invoiceId}`)}
+                        onClick={() => navigate(`/invoices/${ar.invoiceId || ar.documentId}`)}
                         className="px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold rounded-lg transition cursor-pointer"
                       >
                         Inspect Result →
