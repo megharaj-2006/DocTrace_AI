@@ -20,13 +20,16 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Auto logout on 401
+// Auto logout on 401 (only for authenticated session requests, not auth endpoints)
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      useAuthStore.getState().logout();
-      window.location.href = "/login";
+      const isAuthEndpoint = error.config?.url?.includes("/auth/");
+      if (!isAuthEndpoint && window.location.pathname !== "/login") {
+        useAuthStore.getState().logout();
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }
