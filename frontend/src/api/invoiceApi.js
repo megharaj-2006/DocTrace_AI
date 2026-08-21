@@ -1,8 +1,8 @@
-﻿import axiosInstance from "./axiosInstance";
+import axiosInstance from "./axiosInstance";
 
 export const getInvoices = async (page = 0, size = 10) => {
   const response = await axiosInstance.get("/invoices", {
-    params: { page, size },
+    params: { page, size, sort: "createdAt,desc" },
   });
   return response.data;
 };

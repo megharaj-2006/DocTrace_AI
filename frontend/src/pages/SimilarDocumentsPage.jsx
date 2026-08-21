@@ -35,7 +35,7 @@ export default function SimilarDocumentsPage() {
         }
       } else {
         // Load available analyzed invoices to choose from
-        const data = await getInvoices(0, 25);
+        const data = await getInvoices(0, 100);
         if (data && data.content) {
           setAllInvoices(data.content.filter((inv) => inv.status === "ANALYZED"));
         }

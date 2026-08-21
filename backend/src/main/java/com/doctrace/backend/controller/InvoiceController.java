@@ -62,7 +62,7 @@ public class InvoiceController {
     @Transactional(readOnly = true)
     public ResponseEntity<Page<InvoiceResponse>> list(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable) {
         User user = userService.findByEmail(userDetails.getUsername());
         Page<InvoiceResponse> page = invoiceService.findAllForUser(user, pageable)
                 .map(entityMapper::toInvoiceResponse);
