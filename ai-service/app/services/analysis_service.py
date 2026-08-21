@@ -159,11 +159,12 @@ class AnalysisService:
                     document_id,
                     classification.document_type.value,
                 )
-                reasons = [
-                    "Document rejected: uploaded content is not a relevant medical document.",
-                    "Document excluded from template similarity analysis because it was classified as non-medical / irrelevant.",
-                    *classification.reasons,
-                ]
+                reasons = list(classification.reasons)
+                if not any("rejected" in r.lower() for r in reasons):
+                    reasons.insert(
+                        0,
+                        "Document Rejected: Uploaded file is an irrelevant document and does not belong to accepted medical document categories (medical invoices, laboratory reports, or prescriptions)."
+                    )
                 return AnalysisResponse(
                     documentId=document_id,
                     fraudScore=0.0,

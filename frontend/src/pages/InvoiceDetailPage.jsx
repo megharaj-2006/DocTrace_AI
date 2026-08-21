@@ -8,6 +8,7 @@ const RiskBadge = ({ risk }) => {
     RED: "bg-red-100 text-red-600 border border-red-200",
     AMBER: "bg-amber-100 text-amber-600 border border-amber-200",
     LOW: "bg-green-100 text-green-600 border border-green-200",
+    REJECTED: "bg-rose-100 text-rose-700 border border-rose-300",
   };
   return <span className={`px-2 py-0.5 rounded text-xs font-semibold ${styles[risk] || "bg-gray-100 text-gray-500"}`}>{risk}</span>;
 };
@@ -105,9 +106,34 @@ export default function InvoiceDetailPage() {
     );
   }
 
-  const risk = analysis?.riskLevel || invoice.riskLevel;
-  const riskColor = risk === "RED" ? "text-red-500" : risk === "AMBER" ? "text-amber-500" : "text-green-500";
-  const riskBg = risk === "RED" ? "bg-red-50" : risk === "AMBER" ? "bg-amber-50" : "bg-green-50";
+  const isIrrelevant = Boolean(
+    analysis?.reasons?.some((r) => {
+      const lower = r.toLowerCase();
+      return (
+        lower.includes("rejected") ||
+        lower.includes("irrelevant") ||
+        lower.includes("not an accepted") ||
+        lower.includes("non-medical") ||
+        lower.includes("relevance gate")
+      );
+    })
+  );
+
+  const risk = isIrrelevant ? "REJECTED" : (analysis?.riskLevel || invoice.riskLevel);
+  const riskColor = isIrrelevant
+    ? "text-rose-600"
+    : risk === "RED"
+    ? "text-red-500"
+    : risk === "AMBER"
+    ? "text-amber-500"
+    : "text-green-500";
+  const riskBg = isIrrelevant
+    ? "bg-rose-50 border border-rose-200"
+    : risk === "RED"
+    ? "bg-red-50"
+    : risk === "AMBER"
+    ? "bg-amber-50"
+    : "bg-green-50";
 
   return (
     <div className="space-y-5">
@@ -164,7 +190,9 @@ export default function InvoiceDetailPage() {
             <div>
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-gray-800 text-sm">{invoice.documentId}</p>
-                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded font-medium">{invoice.status}</span>
+                <span className={`px-2 py-0.5 text-xs rounded font-medium ${isIrrelevant ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-blue-50 text-blue-600"}`}>
+                  {isIrrelevant ? "REJECTED (IRRELEVANT)" : invoice.status}
+                </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">🏥 {invoice.providerName || "—"}</p>
               <p className="text-xs text-gray-400">{invoice.createdAt ? new Date(invoice.createdAt).toLocaleString() : "—"}</p>
@@ -176,19 +204,23 @@ export default function InvoiceDetailPage() {
               <div className="h-14 w-px bg-gray-100" />
               <div className={`flex items-center gap-3 px-5 py-3 rounded-xl ${riskBg}`}>
                 <div>
-                  <p className="text-xs text-gray-500">Risk Level</p>
+                  <p className="text-xs text-gray-500">{isIrrelevant ? "Status" : "Risk Level"}</p>
                   <p className={`text-lg font-bold ${riskColor}`}>{risk}</p>
                 </div>
               </div>
               <div className="h-14 w-px bg-gray-100" />
               <div className="text-center">
                 <p className="text-xs text-gray-500">Fraud Score</p>
-                <p className={`text-3xl font-bold ${riskColor}`}>{analysis.fraudScore?.toFixed(3)}</p>
+                <p className={`text-3xl font-bold ${riskColor}`}>
+                  {isIrrelevant ? "Excluded" : analysis.fraudScore?.toFixed(3)}
+                </p>
               </div>
               <div className="h-14 w-px bg-gray-100" />
               <div className="text-center">
-                <p className="text-xs text-gray-500">Confidence</p>
-                <p className="text-3xl font-bold text-blue-500">{analysis.confidence?.toFixed(3)}</p>
+                <p className="text-xs text-gray-500">Relevance</p>
+                <p className={`text-3xl font-bold ${isIrrelevant ? "text-rose-500" : "text-blue-500"}`}>
+                  {isIrrelevant ? "0.0%" : `${(analysis.confidence * 100).toFixed(0)}%`}
+                </p>
               </div>
             </>
           )}
@@ -197,6 +229,35 @@ export default function InvoiceDetailPage() {
 
       <div className="grid grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
+          {/* Prominent Relevance Gate Notice if Irrelevant */}
+          {isIrrelevant && (
+            <div className="bg-gradient-to-r from-rose-50 via-amber-50 to-orange-50 border-2 border-rose-300 rounded-xl p-5 shadow-xs">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-rose-900 tracking-tight">
+                      Document Rejected by Relevance Gate
+                    </h3>
+                    <span className="px-2 py-0.5 bg-rose-200/80 text-rose-800 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                      Non-Medical Document
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-800 leading-relaxed">
+                    This uploaded file was identified as an <strong>irrelevant document</strong> and is not among the accepted document formats (<strong>Medical Invoices, Medical Bills, Laboratory Reports, Prescriptions, or Hospital Discharge Summaries</strong>).
+                  </p>
+                  <p className="text-xs text-rose-700 leading-relaxed">
+                    To maintain corpus integrity, the AI pipeline has <strong>rejected this file from DINOv2 vision embedding extraction, structural layout fingerprinting, and vector database indexing</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Analysis Results */}
           {analysis ? (
             <>
@@ -229,14 +290,18 @@ export default function InvoiceDetailPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-lg bg-gray-50 p-3">
                     <p className="text-xs text-gray-400">Fraud score</p>
-                    <p className={`mt-1 text-xl font-bold ${riskColor}`}>{(analysis.fraudScore * 100).toFixed(1)}%</p>
+                    <p className={`mt-1 text-xl font-bold ${riskColor}`}>
+                      {isIrrelevant ? "Excluded" : `${(analysis.fraudScore * 100).toFixed(1)}%`}
+                    </p>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-3">
-                    <p className="text-xs text-gray-400">Confidence</p>
-                    <p className="mt-1 text-xl font-bold text-blue-500">{(analysis.confidence * 100).toFixed(1)}%</p>
+                    <p className="text-xs text-gray-400">Relevance Status</p>
+                    <p className={`mt-1 text-xl font-bold ${isIrrelevant ? "text-rose-600" : "text-blue-500"}`}>
+                      {isIrrelevant ? "Rejected" : `${(analysis.confidence * 100).toFixed(1)}%`}
+                    </p>
                   </div>
                   <div className="rounded-lg bg-gray-50 p-3">
-                    <p className="text-xs text-gray-400">Similar documents</p>
+                    <p className="text-xs text-gray-400">Corpus Matches</p>
                     <p className="mt-1 text-xl font-bold text-gray-800">{analysis.matchedDocuments?.length || 0}</p>
                   </div>
                 </div>
@@ -244,19 +309,24 @@ export default function InvoiceDetailPage() {
 
               {/* Reasons */}
               {analysis.reasons?.length > 0 && (
-                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <div className={`bg-white rounded-xl p-5 shadow-sm border ${isIrrelevant ? "border-rose-200" : "border-gray-100"}`}>
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center">
-                      <svg className="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isIrrelevant ? "bg-rose-100 text-rose-600" : "bg-red-100 text-red-500"}`}>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                     </div>
-                    <h3 className="text-sm font-semibold text-gray-800">Reasons</h3>
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      {isIrrelevant ? "Relevance Gate & Rejection Reasons" : "Reasons"}
+                    </h3>
                   </div>
                   <ul className="space-y-2">
                     {analysis.reasons.map((r, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                        <span className="text-gray-400 mt-0.5">•</span>{r}
+                      <li key={i} className={`flex items-start gap-2 text-xs leading-relaxed ${isIrrelevant ? "text-rose-900 font-medium" : "text-gray-600"}`}>
+                        <span className={`mt-0.5 ${isIrrelevant ? "text-rose-500 font-bold" : "text-gray-400"}`}>
+                          {isIrrelevant ? "✕" : "•"}
+                        </span>
+                        <span>{r}</span>
                       </li>
                     ))}
                   </ul>

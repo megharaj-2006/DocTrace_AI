@@ -116,6 +116,16 @@ class DocumentClassifier:
             confidence=confidence if provider_name else 0.0,
         )
 
+    @staticmethod
+    def _match_keywords(keyword_set: Set[str], text: str) -> List[str]:
+        """Find matching domain keywords using word boundaries to prevent subword false positives."""
+        matched = []
+        for kw in keyword_set:
+            pattern = r"(?:\b)" + re.escape(kw) + r"(?:\b)"
+            if re.search(pattern, text, re.IGNORECASE):
+                matched.append(kw)
+        return matched
+
     def classify_and_gate(self, processed_doc: ProcessedDocument) -> DocumentClassification:
         """Perform document classification and relevance gating on processed document."""
         # 1. Aggregate OCR and layout metrics across all pages
@@ -139,13 +149,13 @@ class DocumentClassifier:
             for p in processed_doc.pages for r in p.layout_regions
         )
 
-        # 2. Extract domain keywords
+        # 2. Extract domain keywords using word-boundary matching
         text_lower = total_text.lower()
         
-        detected_invoice_kw = [kw for kw in self.INVOICE_KEYWORDS if kw in text_lower]
-        detected_rx_kw = [kw for kw in self.PRESCRIPTION_KEYWORDS if kw in text_lower]
-        detected_lab_kw = [kw for kw in self.LAB_KEYWORDS if kw in text_lower]
-        detected_med_kw = [kw for kw in self.GENERIC_MEDICAL_KEYWORDS if kw in text_lower]
+        detected_invoice_kw = self._match_keywords(self.INVOICE_KEYWORDS, text_lower)
+        detected_rx_kw = self._match_keywords(self.PRESCRIPTION_KEYWORDS, text_lower)
+        detected_lab_kw = self._match_keywords(self.LAB_KEYWORDS, text_lower)
+        detected_med_kw = self._match_keywords(self.GENERIC_MEDICAL_KEYWORDS, text_lower)
 
         all_detected_kw = list(set(detected_invoice_kw + detected_rx_kw + detected_lab_kw + detected_med_kw))
 
@@ -155,12 +165,14 @@ class DocumentClassifier:
         # 3. Evaluate Relevance & Gating Logic
         reasons: List[str] = []
 
-        # REJECTION CONDITION 1: Almost zero text or no OCR content (e.g. cow/landscape/photo)
+        # REJECTION CONDITION 1: Almost zero text or no OCR content (e.g. photo / non-document / landscape)
         if total_chars < self.min_text_chars:
             reasons.append(
-                f"Insufficient recognized text content ({total_chars} chars < {self.min_text_chars} min threshold)."
+                "Document Rejected: Uploaded file is an irrelevant document and does not belong to accepted medical document categories (medical invoices, laboratory reports, or prescriptions)."
             )
-            reasons.append("Document lacks readable tabular or structured claim information.")
+            reasons.append(
+                f"Relevance Gate: Insufficient readable text content ({total_chars} characters detected; minimum required is {self.min_text_chars}). Image appears to be a photo, graphic, or non-text document."
+            )
             return DocumentClassification(
                 document_type=DocumentType.IRRELEVANT,
                 relevance_status=RelevanceStatus.IRRELEVANT,
@@ -172,17 +184,21 @@ class DocumentClassifier:
                 metadata={"total_chars": total_chars, "mean_ocr_conf": mean_ocr_conf},
             )
 
-        # REJECTION CONDITION 2: No medical or invoice keywords and no structured document layout
+        # REJECTION CONDITION 2: No medical or invoice domain keywords and no recognizable medical provider
         has_domain_keywords = bool(all_detected_kw)
-        has_document_structure = has_table_layout or has_header_layout or total_ocr_regions >= 5
+        has_provider = bool(provider_info and provider_info.name and provider_info.confidence >= 0.70)
 
-        if not has_domain_keywords and not has_document_structure:
-            reasons.append("No medical or billing domain terminology identified in document.")
-            reasons.append("Document lacks standard medical invoice or clinical report structure.")
+        if not has_domain_keywords and not has_provider:
+            reasons.append(
+                "Document Rejected: Uploaded file is an irrelevant document and does not belong to accepted medical document categories (medical invoices, laboratory reports, or prescriptions)."
+            )
+            reasons.append(
+                "Relevance Gate: No medical, billing, clinical, diagnostic, or healthcare provider terminology identified in document."
+            )
             return DocumentClassification(
                 document_type=DocumentType.IRRELEVANT,
                 relevance_status=RelevanceStatus.IRRELEVANT,
-                confidence=0.90,
+                confidence=0.95,
                 reasons=reasons,
                 detected_keywords=[],
                 provider_info=None,
@@ -206,24 +222,28 @@ class DocumentClassifier:
         # Determine dominant document type
         best_type, best_score = max(scores.items(), key=lambda x: x[1])
 
-        # If keywords are weak but provider was identified or there is significant text
-        if best_score == 0 and (provider_info.confidence > 0 or has_document_structure):
-            best_type = DocumentType.OTHER_MEDICAL
-            best_score = 1.0
-
-        # If still no medical signal at all
-        if best_score == 0 and not has_domain_keywords:
-            reasons.append("Document does not match medical reimbursement categories (invoice/prescription/lab).")
-            return DocumentClassification(
-                document_type=DocumentType.IRRELEVANT,
-                relevance_status=RelevanceStatus.IRRELEVANT,
-                confidence=0.85,
-                reasons=reasons,
-                detected_keywords=all_detected_kw,
-                provider_info=provider_info,
-                is_medical_document=False,
-                metadata={"total_chars": total_chars, "scores": scores},
-            )
+        # If keyword score is 0 but provider was identified
+        if best_score == 0:
+            if has_provider:
+                best_type = DocumentType.OTHER_MEDICAL
+                best_score = 1.0
+            else:
+                reasons.append(
+                    "Document Rejected: Uploaded file is an irrelevant document and does not belong to accepted medical document categories (medical invoices, laboratory reports, or prescriptions)."
+                )
+                reasons.append(
+                    "Relevance Gate: Document does not match accepted medical reimbursement categories (invoice/prescription/lab report)."
+                )
+                return DocumentClassification(
+                    document_type=DocumentType.IRRELEVANT,
+                    relevance_status=RelevanceStatus.IRRELEVANT,
+                    confidence=0.90,
+                    reasons=reasons,
+                    detected_keywords=all_detected_kw,
+                    provider_info=provider_info,
+                    is_medical_document=False,
+                    metadata={"total_chars": total_chars, "scores": scores},
+                )
 
         # 5. Determine Final Relevance Status
         if mean_ocr_conf < self.min_confidence and total_chars < 50:
